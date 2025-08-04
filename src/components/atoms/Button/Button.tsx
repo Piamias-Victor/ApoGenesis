@@ -10,7 +10,7 @@ type ButtonSize = 'sm' | 'md' | 'lg' | 'xl';
 interface ButtonProps {
   readonly variant: ButtonVariant;
   readonly size: ButtonSize;
-  readonly children: React.ReactNode;
+  readonly children?: React.ReactNode;
   readonly onClick?: () => void;
   readonly type?: 'button' | 'submit' | 'reset';
   readonly disabled?: boolean;

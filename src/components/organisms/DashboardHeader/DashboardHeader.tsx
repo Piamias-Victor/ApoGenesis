@@ -15,6 +15,7 @@ import { PharmacyFilterButton } from '@/components/molecules/PharmacyFilterButto
 import { PharmacyFilterDrawer } from '@/components/molecules/PharmacyFilterDrawer/PharmacyFilterDrawer';
 import { ProductFilterButton } from '@/components/molecules/ProductFilterButton/ProductFilterButton';
 import { ProductFilterDrawer } from '@/components/molecules/ProductFilterDrawer/ProductFilterDrawer';
+import { useSelectedProductIds } from '@/store/productFiltersStore';
 import { Settings, LogOut } from 'lucide-react';
 
 interface DashboardHeaderProps {
@@ -32,6 +33,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className = ''
   const router = useRouter();
   const { user, isLoading, role, pharmacyName } = useAuth();
   const { dateFilters, isLoading: dateLoading } = useDateFilters();
+  const selectedProductIds = useSelectedProductIds();
 
   const [isDateDrawerOpen, setIsDateDrawerOpen] = useState(false);
   const [isPharmacyDrawerOpen, setIsPharmacyDrawerOpen] = useState(false);
@@ -80,6 +82,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className = ''
     <>
       <motion.header
         className={`
+          fixed top-0 left-0 right-0 z-50 
           bg-white border-b border-gray-200 shadow-soft
           ${className}
         `}
@@ -127,7 +130,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className = ''
               {/* Filtre Produits */}
               <ProductFilterButton
                 onClick={() => setIsProductDrawerOpen(true)}
-                selectedCount={0} // TODO: gérer la sélection
+                selectedCount={selectedProductIds.length}
               />
 
             </div>

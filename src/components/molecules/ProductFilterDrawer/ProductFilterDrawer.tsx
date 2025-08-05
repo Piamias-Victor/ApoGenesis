@@ -4,6 +4,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/atoms/Button/Button';
+import { ProductSearchInput } from '@/components/molecules/ProductSearchInput/ProductSearchInput';
+import { useProductFiltersStore } from '@/store/productFiltersStore';
 import { 
   X, 
   Package, 
@@ -55,7 +57,15 @@ export const ProductFilterDrawer: React.FC<ProductFilterDrawerProps> = ({
   className = '',
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('products');
-  const [selectedCount] = useState(0); // TODO: gérer les sélections
+  
+  const {
+    selectedProductIds,
+    searchResults,
+    resetFilters,
+    selectAllProducts,
+    deselectAllProducts,
+    getSelectedProducts,
+  } = useProductFiltersStore();
 
   useEffect(() => {
     if (isOpen) {
@@ -70,28 +80,62 @@ export const ProductFilterDrawer: React.FC<ProductFilterDrawerProps> = ({
   }, [isOpen]);
 
   const handleApply = (): void => {
-    console.log('Filtres produits appliqués:', { activeTab, selectedCount });
+    const selectedProducts = getSelectedProducts();
+    console.log('Filtres produits appliqués:', {
+      activeTab,
+      selectedCount: selectedProductIds.length,
+      selectedIds: selectedProductIds,
+      selectedProducts
+    });
     onClose();
   };
 
   const handleReset = (): void => {
-    console.log('Reset filtres produits');
-    // TODO: implémenter le reset
+    resetFilters();
   };
 
   const renderTabContent = (): React.ReactNode => {
     switch (activeTab) {
       case 'products':
         return (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center text-gray-500">
-              <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Recherche Produits
-              </h3>
-              <p className="text-sm text-gray-500">
-                Contenu à venir...
-              </p>
+          <div className="flex-1 flex flex-col p-6">
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Recherche de produits
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Tapez au moins 3 caractères. La recherche se fait automatiquement par nom ou code produit.
+                </p>
+              </div>
+              
+              <ProductSearchInput />
+              
+              {searchResults.length > 0 && (
+                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                  <div className="text-sm text-gray-600">
+                    {searchResults.length} résultat(s) • {selectedProductIds.length} sélectionné(s)
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={selectAllProducts}
+                      disabled={searchResults.length === 0}
+                    >
+                      Tout sélectionner
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={deselectAllProducts}
+                      disabled={selectedProductIds.length === 0}
+                    >
+                      Tout désélectionner
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );
@@ -273,9 +317,9 @@ export const ProductFilterDrawer: React.FC<ProductFilterDrawerProps> = ({
                 
                 <div className="flex items-center space-x-3">
                   <div className="text-sm text-gray-600">
-                    {selectedCount > 0 && (
+                    {selectedProductIds.length > 0 && (
                       <span className="font-medium text-blue-600">
-                        {selectedCount} sélection(s)
+                        {selectedProductIds.length} produit(s) sélectionné(s)
                       </span>
                     )}
                   </div>
@@ -291,7 +335,7 @@ export const ProductFilterDrawer: React.FC<ProductFilterDrawerProps> = ({
                     size="md"
                     onClick={handleApply}
                   >
-                    Appliquer
+                    Appliquer{selectedProductIds.length > 0 && ` (${selectedProductIds.length})`}
                   </Button>
                 </div>
               </div>

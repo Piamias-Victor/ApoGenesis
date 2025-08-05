@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/shared/useAuth';
 import { Card } from '@/components/atoms/Card/Card';
 import { Badge } from '@/components/atoms/Badge/Badge';
 import { redirect } from 'next/navigation';
+import { AnimatedBackground } from '@/components/atoms/AnimatedBackground/AnimatedBackground';
 
 /**
  * Dashboard Page - Page principale du dashboard
@@ -49,7 +50,7 @@ export default function DashboardPage(): JSX.Element {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container-apodata py-8">
-        
+        <AnimatedBackground />
         {/* Welcome Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}

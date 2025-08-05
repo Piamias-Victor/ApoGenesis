@@ -169,7 +169,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
       {iconRight && (
         <div className={`
           absolute right-3 top-1/2 transform -translate-y-1/2 z-10
-          ${iconSizes[size]} text-gray-500 pointer-events-none
+          ${iconSizes[size]} text-gray-500
           flex items-center justify-center
         `}>
           {iconRight}

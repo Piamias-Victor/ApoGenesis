@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/atoms/Button/Button';
 import { Card } from '@/components/atoms/Card/Card';
 import { 
@@ -70,7 +71,7 @@ const features: DashboardFeature[] = [
   },
   {
     title: "Optimisez vos prix",
-    description: "Comparez vos tarifs et définissez votre positionnement prix pour maximiser vos revenus",
+    description: "Comparez vos tarifs avec la concurrence et définissez votre positionnement prix pour maximiser vos revenus",
     icon: <Target className="w-full h-full" />,
     gradient: "from-yellow-500 to-orange-500"
   },
@@ -95,9 +96,10 @@ interface DashboardFeaturesSectionProps {
 export const DashboardFeaturesSection: React.FC<DashboardFeaturesSectionProps> = ({ 
   className = '' 
 }) => {
+  const router = useRouter();
+
   const handleDiscoverClick = (): void => {
-    console.log('Découvrir clicked - TODO: Implement navigation');
-    // TODO: Navigation vers dashboard ou demo
+    router.push('/login');
   };
 
   return (

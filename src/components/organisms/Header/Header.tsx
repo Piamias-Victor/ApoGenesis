@@ -3,6 +3,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/atoms/Button/Button';
 
 // Icons nécessaires
@@ -73,12 +74,28 @@ interface HeaderProps {
  */
 export const Header: React.FC<HeaderProps> = ({ className = '' }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const router = useRouter();
 
   const toggleMobileMenu = (): void => {
     setIsMobileMenuOpen(prev => !prev);
   };
 
+  const handleLoginClick = (): void => {
+    router.push('/login');
+  };
+
+  const handleHomeClick = (): void => {
+    router.push('/');
+  };
+
   const scrollToSection = (href: string): void => {
+    // Si on n'est pas sur la homepage, rediriger d'abord
+    if (window.location.pathname !== '/') {
+      router.push(`/${href}`);
+      return;
+    }
+    
+    // Sinon, scroll vers la section
     const element = document.querySelector(href);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
@@ -101,7 +118,8 @@ export const Header: React.FC<HeaderProps> = ({ className = '' }) => {
       <div className="container-apodata">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <motion.div
+          <motion.button
+            onClick={handleHomeClick}
             className="flex items-center"
             whileHover={{ scale: 1.02 }}
             transition={{ duration: 0.2 }}
@@ -109,7 +127,7 @@ export const Header: React.FC<HeaderProps> = ({ className = '' }) => {
             <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
               ApoData
             </h1>
-          </motion.div>
+          </motion.button>
 
           {/* Navigation Desktop */}
           <nav className="hidden md:flex items-center space-x-8">
@@ -148,7 +166,7 @@ export const Header: React.FC<HeaderProps> = ({ className = '' }) => {
             <Button
               variant="primary"
               size="sm"
-              onClick={() => console.log('Connexion')}
+              onClick={handleLoginClick}
             >
               Connexion
             </Button>
@@ -215,7 +233,7 @@ export const Header: React.FC<HeaderProps> = ({ className = '' }) => {
                     variant="primary"
                     size="md"
                     fullWidth
-                    onClick={() => console.log('Connexion')}
+                    onClick={handleLoginClick}
                   >
                     Connexion
                   </Button>

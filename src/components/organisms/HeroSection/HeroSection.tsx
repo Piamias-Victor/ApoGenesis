@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/atoms/Button/Button';
 import { Card } from '@/components/atoms/Card/Card';
 import { Badge } from '@/components/atoms/Badge/Badge';
@@ -43,9 +44,10 @@ interface HeroSectionProps {
  * Design Apple minimaliste avec badges de crédibilité
  */
 export const HeroSection: React.FC<HeroSectionProps> = ({ className = '' }) => {
+  const router = useRouter();
+
   const handleStartClick = (): void => {
-    console.log('Commencer clicked - TODO: Implement navigation');
-    // TODO: Redirection vers page login/signup
+    router.push('/login');
   };
 
   return (
@@ -229,7 +231,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ className = '' }) => {
                 {/* Info Bar */}
                 <div className="flex items-center justify-center pt-4 border-t border-gray-200/50">
                   <p className="text-sm text-gray-500">
-                    Données en temps réel • Mise à jour automatique • Interface zero formation
+                    Données en temps réel • Calculs sur millions de lignes • Interface zero formation
                   </p>
                 </div>
 

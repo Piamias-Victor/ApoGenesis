@@ -1,4 +1,4 @@
-// src/stores/pharmacyFiltersStore.ts
+// src/store/pharmacyFiltersStore.ts
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 
@@ -8,7 +8,7 @@ interface Pharmacy {
   readonly updated_at: string;
   readonly id_nat: string | null;
   readonly name: string | null;
-  readonly ca: string | null; // Format PostgreSQL "15354910.49"
+  readonly ca: string | null;
   readonly area: string | null;
   readonly employees_count: number | null;
   readonly address: string | null;
@@ -57,7 +57,6 @@ const getDefaultState = (): PharmacyFiltersState => ({
   error: null,
 });
 
-// Utilitaires de filtrage
 const filterBySearch = (pharmacies: Pharmacy[], searchTerm: string): Pharmacy[] => {
   if (!searchTerm.trim()) return pharmacies;
   
@@ -83,7 +82,7 @@ const filterByCA = (pharmacies: Pharmacy[], range: CARange): Pharmacy[] => {
   return pharmacies.filter(pharmacy => {
     if (!pharmacy.ca) return false;
     
-    const ca = parseFloat(pharmacy.ca) / 1000000; // Conversion en millions
+    const ca = parseFloat(pharmacy.ca) / 1000000;
     
     switch (range) {
       case '0-3': return ca >= 0 && ca <= 3;
@@ -114,13 +113,13 @@ const filterByEmployees = (pharmacies: Pharmacy[], range: EmployeesRange): Pharm
   });
 };
 
-export const usePharmacyFiltersStore = create<PharmacyFiltersState & PharmacyFiltersActions>(
+type PharmacyFiltersStore = PharmacyFiltersState & PharmacyFiltersActions;
+
+export const usePharmacyFiltersStore = create<PharmacyFiltersStore>()(
   devtools(
     (set, get) => ({
-      // État initial
       ...getDefaultState(),
 
-      // Actions
       setPharmacies: (pharmacies) => {
         set({ pharmacies, error: null }, false, 'setPharmacies');
       },
@@ -187,7 +186,7 @@ export const usePharmacyFiltersStore = create<PharmacyFiltersState & PharmacyFil
         const { pharmacies } = get();
         set({
           ...getDefaultState(),
-          pharmacies, // Garder les pharmacies chargées
+          pharmacies,
         }, false, 'resetFilters');
       },
 
@@ -221,7 +220,6 @@ export const usePharmacyFiltersStore = create<PharmacyFiltersState & PharmacyFil
   )
 );
 
-// Sélecteurs optimisés
 export const usePharmacies = () => usePharmacyFiltersStore(state => state.pharmacies);
 export const useSelectedPharmacyIds = () => usePharmacyFiltersStore(state => state.selectedPharmacyIds);
 export const usePharmacyFiltersActions = () => usePharmacyFiltersStore(state => ({

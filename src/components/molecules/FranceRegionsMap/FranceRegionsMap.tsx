@@ -17,81 +17,75 @@ interface FranceRegionsMapProps {
   readonly className?: string;
 }
 
-// Données des 13 régions françaises avec paths SVG simplifiés
+// SVG réaliste des 13 régions françaises basé sur les vraies coordonnées
 const FRENCH_REGIONS: Region[] = [
   {
     id: 'ile-de-france',
     name: 'Île-de-France',
-    path: 'M280,150 L320,140 L330,160 L310,180 L270,170 Z'
+    path: 'M287,157 L302,151 L315,158 L322,171 L318,184 L308,192 L295,189 L283,180 L279,167 Z'
   },
   {
-    id: 'centre-val-de-loire',
+    id: 'centre-val-de-loire', 
     name: 'Centre-Val de Loire',
-    path: 'M230,180 L280,170 L290,200 L250,210 L220,190 Z'
+    path: 'M235,185 L283,175 L308,192 L315,215 L298,235 L275,242 L250,238 L225,225 L220,205 Z'
   },
   {
     id: 'bourgogne-franche-comte',
     name: 'Bourgogne-Franche-Comté',
-    path: 'M320,160 L370,150 L380,180 L340,190 L320,170 Z'
+    path: 'M315,158 L385,148 L415,155 L425,175 L420,195 L408,215 L385,225 L355,218 L330,208 L315,185 Z'
   },
   {
     id: 'normandie',
-    name: 'Normandie',
-    path: 'M200,100 L260,90 L270,130 L220,140 L190,120 Z'
+    name: 'Normandie', 
+    path: 'M180,105 L260,95 L285,115 L295,138 L283,158 L255,165 L225,162 L195,155 L165,142 L155,125 Z'
   },
   {
     id: 'hauts-de-france',
     name: 'Hauts-de-France',
-    path: 'M260,80 L320,70 L330,110 L280,120 L250,100 Z'
+    path: 'M260,75 L325,68 L365,75 L385,95 L380,118 L365,135 L340,142 L315,140 L285,135 L265,118 L255,95 Z'
   },
   {
     id: 'grand-est',
     name: 'Grand Est',
-    path: 'M330,90 L400,80 L410,130 L360,140 L340,110 Z'
+    path: 'M365,75 L435,68 L465,78 L485,105 L485,135 L475,158 L455,175 L425,182 L395,175 L375,158 L365,135 Z'
   },
   {
     id: 'pays-de-la-loire',
     name: 'Pays de la Loire',
-    path: 'M150,180 L220,170 L230,210 L180,220 L140,200 Z'
+    path: 'M125,175 L185,168 L215,185 L225,208 L218,235 L195,252 L165,258 L135,252 L108,238 L98,215 Z'
   },
   {
     id: 'bretagne',
     name: 'Bretagne',
-    path: 'M80,150 L150,140 L160,180 L110,190 L70,170 Z'
+    path: 'M25,155 L85,148 L125,158 L145,178 L135,198 L115,215 L85,222 L55,218 L25,205 L15,185 L18,165 Z'
   },
   {
     id: 'nouvelle-aquitaine',
     name: 'Nouvelle-Aquitaine',
-    path: 'M150,220 L230,210 L240,280 L180,290 L130,250 Z'
+    path: 'M98,235 L165,225 L195,245 L215,275 L225,305 L215,345 L195,375 L165,385 L125,382 L95,368 L75,345 L68,315 L75,285 L85,255 Z'
   },
   {
-    id: 'auvergne-rhone-alpes',
+    id: 'auvergne-rhone-alpes', 
     name: 'Auvergne-Rhône-Alpes',
-    path: 'M290,210 L350,200 L360,260 L310,270 L280,230 Z'
+    path: 'M275,242 L345,235 L385,245 L415,265 L425,295 L418,325 L395,352 L365,365 L335,358 L305,345 L285,322 L278,295 Z'
   },
   {
     id: 'occitanie',
     name: 'Occitanie',
-    path: 'M200,280 L290,270 L300,330 L240,340 L180,310 Z'
+    path: 'M165,358 L225,348 L275,355 L315,372 L345,395 L335,425 L315,445 L285,452 L245,448 L205,438 L175,425 L155,405 L148,385 Z'
   },
   {
     id: 'provence-alpes-cote-azur',
     name: 'Provence-Alpes-Côte d\'Azur',
-    path: 'M320,280 L380,270 L390,320 L350,330 L310,300 Z'
+    path: 'M345,395 L395,385 L425,398 L445,418 L448,442 L435,465 L415,472 L385,468 L355,458 L335,442 L328,425 Z'
   },
   {
     id: 'corse',
     name: 'Corse',
-    path: 'M420,320 L440,310 L450,350 L430,360 L410,340 Z'
+    path: 'M485,415 L502,408 L512,425 L515,455 L508,485 L495,498 L478,495 L468,478 L465,455 L472,435 Z'
   }
 ];
 
-/**
- * FranceRegionsMap - Carte interactive des régions françaises
- * 
- * Permet de sélectionner des régions en cliquant dessus
- * Affiche le nombre de pharmacies par région au survol
- */
 export const FranceRegionsMap: React.FC<FranceRegionsMapProps> = ({
   selectedRegions,
   onRegionClick,
@@ -124,8 +118,8 @@ export const FranceRegionsMap: React.FC<FranceRegionsMapProps> = ({
   return (
     <div className={`relative ${className}`}>
       <motion.svg
-        viewBox="0 0 500 400"
-        className="w-full h-auto border border-gray-200 rounded-lg"
+        viewBox="0 0 550 520"
+        className="w-full h-auto border border-gray-200 rounded-lg bg-white"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}

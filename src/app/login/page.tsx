@@ -4,6 +4,8 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { signIn } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { AnimatedBackground } from '@/components/atoms/AnimatedBackground/AnimatedBackground';
 import { Header } from '@/components/organisms/Header/Header';
 import { Input } from '@/components/atoms/Input/Input';
@@ -24,13 +26,15 @@ interface LoginErrors {
   general?: string;
 }
 
-/**
- * Login Page - Page de connexion ApoData
- * 
- * Formulaire centré avec validation temps réel,
- * show/hide password, remember me et gestion d'erreurs
- */
+interface NotificationState {
+  show: boolean;
+  type: 'success' | 'error' | 'warning' | 'info';
+  message: string;
+}
+
 export default function LoginPage(): JSX.Element {
+  const router = useRouter();
+  
   const [formData, setFormData] = useState<LoginForm>({
     email: '',
     password: '',
@@ -40,8 +44,19 @@ export default function LoginPage(): JSX.Element {
   const [errors, setErrors] = useState<LoginErrors>({});
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showNotification, setShowNotification] = useState(false);
-  const [notificationMessage, setNotificationMessage] = useState('');
+  const [notification, setNotification] = useState<NotificationState>({
+    show: false,
+    type: 'info',
+    message: ''
+  });
+
+  const showNotification = (type: NotificationState['type'], message: string): void => {
+    setNotification({ show: true, type, message });
+  };
+
+  const hideNotification = (): void => {
+    setNotification(prev => ({ ...prev, show: false }));
+  };
 
   const handleInputChange = (field: keyof LoginForm) => (
     event: React.ChangeEvent<HTMLInputElement>
@@ -53,7 +68,6 @@ export default function LoginPage(): JSX.Element {
       [field]: value
     }));
     
-    // Clear error when user starts typing (only for email/password)
     if (field !== 'rememberMe' && errors[field as keyof LoginErrors]) {
       setErrors(prev => ({
         ...prev,
@@ -81,7 +95,7 @@ export default function LoginPage(): JSX.Element {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent): Promise<void> => {
     event.preventDefault();
     
     if (!validateForm()) return;
@@ -89,54 +103,48 @@ export default function LoginPage(): JSX.Element {
     setIsSubmitting(true);
     
     try {
-      // TODO: Implement actual login logic
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Simulate login error for demo
-      if (formData.email === 'error@test.com') {
-        throw new Error('Email ou mot de passe incorrect');
+      const result = await signIn('credentials', {
+        redirect: false,
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (result?.error) {
+        showNotification('error', 'Email ou mot de passe incorrect.');
+      } else if (result?.ok) {
+        showNotification('success', 'Connexion réussie ! Redirection...');
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 1500);
+      } else {
+        showNotification('error', 'Une erreur inattendue est survenue.');
       }
-      
-      console.log('Login successful:', formData);
-      // TODO: Redirect to dashboard
-      setNotificationMessage('Connexion réussie ! Redirection...');
-      setShowNotification(true);
-      
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Erreur de connexion';
-      setNotificationMessage(errorMessage);
-      setShowNotification(true);
+      console.error('Erreur de connexion:', error);
+      showNotification('error', 'Erreur de connexion. Veuillez réessayer.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleForgotPassword = () => {
-    console.log('Forgot password clicked');
-    // TODO: Implement forgot password logic
-    setNotificationMessage('Fonctionnalité bientôt disponible');
-    setShowNotification(true);
+  const handleForgotPassword = (): void => {
+    showNotification('info', 'Fonctionnalité bientôt disponible');
   };
 
   return (
     <div className="min-h-screen bg-gray-50 relative overflow-hidden">
-      {/* Background animé */}
       <AnimatedBackground />
-      
-      {/* Header */}
       <Header />
       
-      {/* Notification */}
       <Notification
-        type="error"
-        message={notificationMessage}
-        visible={showNotification}
-        onClose={() => setShowNotification(false)}
+        type={notification.type}
+        message={notification.message}
+        visible={notification.show}
+        onClose={hideNotification}
         autoClose
         duration={4000}
       />
       
-      {/* Contenu principal */}
       <main className="relative z-10 pt-16 pb-20">
         <div className="min-h-[calc(100vh-9rem)] flex items-center justify-center px-4">
           <motion.div
@@ -146,7 +154,6 @@ export default function LoginPage(): JSX.Element {
             className="w-full max-w-md"
           >
             
-            {/* Retour à l'accueil */}
             <div className="mt-12 mb-6">
               <Link 
                 href="/"
@@ -160,20 +167,17 @@ export default function LoginPage(): JSX.Element {
             <Card variant="elevated" padding="xl">
               <div className="space-y-6">
                 
-                {/* Header */}
                 <div className="text-center space-y-2">
                   <h1 className="text-2xl font-bold text-gray-900">
                     Se connecter
                   </h1>
                   <p className="text-gray-600">
-                    Accédez à votre dashboard ApoData pour reprendre la main sur vos données
+                    Accédez à votre dashboard ApoData
                   </p>
                 </div>
 
-                {/* Formulaire */}
                 <form onSubmit={handleSubmit} className="space-y-4">
                   
-                  {/* Email */}
                   <Input
                     variant="default"
                     size="lg"
@@ -187,7 +191,6 @@ export default function LoginPage(): JSX.Element {
                     required
                   />
 
-                  {/* Password */}
                   <Input
                     variant="default"
                     size="lg"
@@ -210,27 +213,19 @@ export default function LoginPage(): JSX.Element {
                     required
                   />
 
-                  {/* Remember Me */}
                   <div className="flex items-center">
                     <input
                       type="checkbox"
                       id="rememberMe"
                       checked={formData.rememberMe}
                       onChange={handleInputChange('rememberMe')}
-                      className="
-                        w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded
-                        focus:ring-blue-500 focus:ring-2 transition-colors duration-200
-                      "
+                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
                     />
-                    <label 
-                      htmlFor="rememberMe" 
-                      className="ml-2 text-sm text-gray-700 cursor-pointer"
-                    >
+                    <label htmlFor="rememberMe" className="ml-2 text-sm text-gray-700 cursor-pointer">
                       Se souvenir de moi
                     </label>
                   </div>
 
-                  {/* Submit Button */}
                   <Button
                     variant="primary"
                     size="lg"
@@ -243,7 +238,6 @@ export default function LoginPage(): JSX.Element {
                     Se connecter
                   </Button>
 
-                  {/* Forgot Password */}
                   <div className="text-center">
                     <Button
                       variant="ghost"
@@ -257,7 +251,6 @@ export default function LoginPage(): JSX.Element {
 
                 </form>
 
-                {/* Footer info */}
                 <div className="text-center pt-4 border-t border-gray-200">
                   <p className="text-xs text-gray-500">
                     Connexion sécurisée • Données chiffrées • Conformité RGPD
@@ -266,8 +259,6 @@ export default function LoginPage(): JSX.Element {
 
               </div>
             </Card>
-
-            
 
           </motion.div>
         </div>

@@ -5,9 +5,9 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/atoms/Button/Button';
 import { Input } from '@/components/atoms/Input/Input';
+import { useDateFilters } from '@/hooks/dashboard/useDateFilters';
 import { X, Calendar, TrendingUp } from 'lucide-react';
 import { 
-  DateFilterState, 
   AnalysisPeriod, 
   ComparisonPeriod, 
   AnalysisPeriodType,
@@ -18,31 +18,37 @@ import {
 interface DateFilterDrawerProps {
   readonly isOpen: boolean;
   readonly onClose: () => void;
-  readonly filterState: DateFilterState;
-  readonly onFilterChange: (state: DateFilterState) => void;
   readonly className?: string;
 }
 
 /**
  * DateFilterDrawer - Drawer de sélection des périodes d'analyse et de comparaison
  * 
- * Section 1: Période d'analyse (mois en cours, mois dernier, 12 derniers mois, custom)
- * Section 2: Période de comparaison (période précédente, année dernière, custom)
+ * Utilise directement le store global Zustand pour la gestion d'état
+ * Les changements sont appliqués uniquement au clic "Appliquer"
  */
 export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
   isOpen,
   onClose,
-  filterState,
-  onFilterChange,
   className = '',
 }) => {
-  const [localState, setLocalState] = useState<DateFilterState>(filterState);
+  const { 
+    dateFilters, 
+    setFilters, 
+    resetToDefaults 
+  } = useDateFilters();
+
+  // État local temporaire pour les modifications avant validation
+  const [localAnalysisPeriod, setLocalAnalysisPeriod] = useState<AnalysisPeriod>(dateFilters.analysisPeriod);
+  const [localComparisonPeriod, setLocalComparisonPeriod] = useState<ComparisonPeriod>(dateFilters.comparisonPeriod);
 
   // Prevent body scroll when drawer is open
   React.useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
-      setLocalState(filterState);
+      // Synchroniser l'état local avec le store global à l'ouverture
+      setLocalAnalysisPeriod(dateFilters.analysisPeriod);
+      setLocalComparisonPeriod(dateFilters.comparisonPeriod);
     } else {
       document.body.style.overflow = 'unset';
     }
@@ -50,7 +56,7 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
     return () => {
       document.body.style.overflow = 'unset';
     };
-  }, [isOpen, filterState]);
+  }, [isOpen, dateFilters]);
 
   const handleAnalysisPeriodChange = (type: AnalysisPeriodType): void => {
     let newAnalysisPeriod: AnalysisPeriod;
@@ -81,28 +87,22 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
         return;
     }
 
-    // Recalculer automatiquement la période de comparaison
-    let newComparisonPeriod: ComparisonPeriod;
-    if (localState.comparisonPeriod.type === 'previous_period') {
-      newComparisonPeriod = {
+    setLocalAnalysisPeriod(newAnalysisPeriod);
+
+    // Recalculer automatiquement la période de comparaison si nécessaire
+    if (localComparisonPeriod.type === 'previous_period') {
+      setLocalComparisonPeriod({
         type: 'previous_period',
         range: DateUtils.getPreviousPeriod(newAnalysisPeriod.range),
         label: 'Période précédente'
-      };
-    } else if (localState.comparisonPeriod.type === 'same_period_last_year') {
-      newComparisonPeriod = {
+      });
+    } else if (localComparisonPeriod.type === 'same_period_last_year') {
+      setLocalComparisonPeriod({
         type: 'same_period_last_year',
         range: DateUtils.getSamePeriodLastYear(newAnalysisPeriod.range),
         label: 'Année dernière'
-      };
-    } else {
-      newComparisonPeriod = localState.comparisonPeriod;
+      });
     }
-
-    setLocalState({
-      analysisPeriod: newAnalysisPeriod,
-      comparisonPeriod: newComparisonPeriod
-    });
   };
 
   const handleComparisonPeriodChange = (type: ComparisonPeriodType): void => {
@@ -112,14 +112,14 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
       case 'previous_period':
         newComparisonPeriod = {
           type,
-          range: DateUtils.getPreviousPeriod(localState.analysisPeriod.range),
+          range: DateUtils.getPreviousPeriod(localAnalysisPeriod.range),
           label: 'Période précédente'
         };
         break;
       case 'same_period_last_year':
         newComparisonPeriod = {
           type,
-          range: DateUtils.getSamePeriodLastYear(localState.analysisPeriod.range),
+          range: DateUtils.getSamePeriodLastYear(localAnalysisPeriod.range),
           label: 'Année dernière'
         };
         break;
@@ -127,14 +127,27 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
         return;
     }
 
-    setLocalState({
-      ...localState,
-      comparisonPeriod: newComparisonPeriod
-    });
+    setLocalComparisonPeriod(newComparisonPeriod);
   };
 
   const handleApply = (): void => {
-    onFilterChange(localState);
+    // Appliquer les changements au store global
+    setFilters({
+      analysisPeriod: localAnalysisPeriod,
+      comparisonPeriod: localComparisonPeriod
+    });
+    onClose();
+  };
+
+  const handleCancel = (): void => {
+    // Annuler les changements locaux
+    setLocalAnalysisPeriod(dateFilters.analysisPeriod);
+    setLocalComparisonPeriod(dateFilters.comparisonPeriod);
+    onClose();
+  };
+
+  const handleReset = (): void => {
+    resetToDefaults();
     onClose();
   };
 
@@ -148,7 +161,7 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3, ease: 'easeInOut' }}
-            onClick={onClose}
+            onClick={handleCancel}
           />
 
           <motion.div
@@ -181,7 +194,7 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
               </div>
               
               <motion.button
-                onClick={onClose}
+                onClick={handleCancel}
                 className="
                   p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100
                   transition-colors duration-200 flex-shrink-0
@@ -207,17 +220,17 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
                 
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <p className="text-sm text-blue-800 mb-2">
-                    <strong>Sélectionnée :</strong> {localState.analysisPeriod.label}
+                    <strong>Sélectionnée :</strong> {localAnalysisPeriod.label}
                   </p>
                   <p className="text-xs text-blue-600">
-                    Du {localState.analysisPeriod.range.start.toLocaleDateString('fr-FR')} au{' '}
-                    {localState.analysisPeriod.range.end.toLocaleDateString('fr-FR')}
+                    Du {localAnalysisPeriod.range.start.toLocaleDateString('fr-FR')} au{' '}
+                    {localAnalysisPeriod.range.end.toLocaleDateString('fr-FR')}
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 gap-2">
                   <Button
-                    variant={localState.analysisPeriod.type === 'current_month' ? 'primary' : 'secondary'}
+                    variant={localAnalysisPeriod.type === 'current_month' ? 'primary' : 'secondary'}
                     size="md"
                     onClick={() => handleAnalysisPeriodChange('current_month')}
                     fullWidth
@@ -225,7 +238,7 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
                     Mois en cours
                   </Button>
                   <Button
-                    variant={localState.analysisPeriod.type === 'last_month' ? 'primary' : 'secondary'}
+                    variant={localAnalysisPeriod.type === 'last_month' ? 'primary' : 'secondary'}
                     size="md"
                     onClick={() => handleAnalysisPeriodChange('last_month')}
                     fullWidth
@@ -233,7 +246,7 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
                     Mois dernier
                   </Button>
                   <Button
-                    variant={localState.analysisPeriod.type === 'last_12_months' ? 'primary' : 'secondary'}
+                    variant={localAnalysisPeriod.type === 'last_12_months' ? 'primary' : 'secondary'}
                     size="md"
                     onClick={() => handleAnalysisPeriodChange('last_12_months')}
                     fullWidth
@@ -250,21 +263,16 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
                       size="sm"
                       type="date"
                       label="Date début"
-                      value={localState.analysisPeriod.range.start.toISOString().split('T')[0]}
+                      value={localAnalysisPeriod.range.start.toISOString().split('T')[0]}
                       onChange={(e) => {
                         const newStart = new Date(e.target.value);
-                        const newAnalysisPeriod = {
-                          ...localState.analysisPeriod,
-                          type: 'custom' as AnalysisPeriodType,
+                        setLocalAnalysisPeriod({
+                          type: 'custom',
                           range: {
                             start: newStart,
-                            end: localState.analysisPeriod.range.end
+                            end: localAnalysisPeriod.range.end
                           },
                           label: 'Période personnalisée'
-                        };
-                        setLocalState({
-                          ...localState,
-                          analysisPeriod: newAnalysisPeriod
                         });
                       }}
                     />
@@ -273,21 +281,16 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
                       size="sm"  
                       type="date"
                       label="Date fin"
-                      value={localState.analysisPeriod.range.end.toISOString().split('T')[0]}
+                      value={localAnalysisPeriod.range.end.toISOString().split('T')[0]}
                       onChange={(e) => {
                         const newEnd = new Date(e.target.value);
-                        const newAnalysisPeriod = {
-                          ...localState.analysisPeriod,
-                          type: 'custom' as AnalysisPeriodType,
+                        setLocalAnalysisPeriod({
+                          type: 'custom',
                           range: {
-                            start: localState.analysisPeriod.range.start,
+                            start: localAnalysisPeriod.range.start,
                             end: newEnd
                           },
                           label: 'Période personnalisée'
-                        };
-                        setLocalState({
-                          ...localState,
-                          analysisPeriod: newAnalysisPeriod
                         });
                       }}
                     />
@@ -306,17 +309,17 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
                 
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                   <p className="text-sm text-green-800 mb-2">
-                    <strong>Comparaison :</strong> {localState.comparisonPeriod.label}
+                    <strong>Comparaison :</strong> {localComparisonPeriod.label}
                   </p>
                   <p className="text-xs text-green-600">
-                    Du {localState.comparisonPeriod.range.start.toLocaleDateString('fr-FR')} au{' '}
-                    {localState.comparisonPeriod.range.end.toLocaleDateString('fr-FR')}
+                    Du {localComparisonPeriod.range.start.toLocaleDateString('fr-FR')} au{' '}
+                    {localComparisonPeriod.range.end.toLocaleDateString('fr-FR')}
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 gap-2">
                   <Button
-                    variant={localState.comparisonPeriod.type === 'previous_period' ? 'primary' : 'secondary'}
+                    variant={localComparisonPeriod.type === 'previous_period' ? 'primary' : 'secondary'}
                     size="md"
                     onClick={() => handleComparisonPeriodChange('previous_period')}
                     fullWidth
@@ -324,7 +327,7 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
                     Période précédente
                   </Button>
                   <Button
-                    variant={localState.comparisonPeriod.type === 'same_period_last_year' ? 'primary' : 'secondary'}
+                    variant={localComparisonPeriod.type === 'same_period_last_year' ? 'primary' : 'secondary'}
                     size="md"
                     onClick={() => handleComparisonPeriodChange('same_period_last_year')}
                     fullWidth
@@ -341,21 +344,16 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
                       size="sm"
                       type="date"
                       label="Date début"
-                      value={localState.comparisonPeriod.range.start.toISOString().split('T')[0]}
+                      value={localComparisonPeriod.range.start.toISOString().split('T')[0]}
                       onChange={(e) => {
                         const newStart = new Date(e.target.value);
-                        const newComparisonPeriod = {
-                          ...localState.comparisonPeriod,
-                          type: 'custom' as ComparisonPeriodType,
+                        setLocalComparisonPeriod({
+                          type: 'custom',
                           range: {
                             start: newStart,
-                            end: localState.comparisonPeriod.range.end
+                            end: localComparisonPeriod.range.end
                           },
                           label: 'Comparaison personnalisée'
-                        };
-                        setLocalState({
-                          ...localState,
-                          comparisonPeriod: newComparisonPeriod
                         });
                       }}
                     />
@@ -364,21 +362,16 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
                       size="sm"
                       type="date"
                       label="Date fin"
-                      value={localState.comparisonPeriod.range.end.toISOString().split('T')[0]}
+                      value={localComparisonPeriod.range.end.toISOString().split('T')[0]}
                       onChange={(e) => {
                         const newEnd = new Date(e.target.value);
-                        const newComparisonPeriod = {
-                          ...localState.comparisonPeriod,
-                          type: 'custom' as ComparisonPeriodType,
+                        setLocalComparisonPeriod({
+                          type: 'custom',
                           range: {
-                            start: localState.comparisonPeriod.range.start,
+                            start: localComparisonPeriod.range.start,
                             end: newEnd
                           },
                           label: 'Comparaison personnalisée'
-                        };
-                        setLocalState({
-                          ...localState,
-                          comparisonPeriod: newComparisonPeriod
                         });
                       }}
                     />
@@ -390,21 +383,31 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
 
             {/* Footer */}
             <div className="p-6 border-t border-gray-200 bg-gray-50">
-              <div className="flex items-center justify-end space-x-3">
+              <div className="flex items-center justify-between">
                 <Button
-                  variant="secondary"
+                  variant="ghost"
                   size="md"
-                  onClick={onClose}
+                  onClick={handleReset}
                 >
-                  Annuler
+                  Réinitialiser
                 </Button>
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={handleApply}
-                >
-                  Appliquer
-                </Button>
+                
+                <div className="flex items-center space-x-3">
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    onClick={handleCancel}
+                  >
+                    Annuler
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="md"
+                    onClick={handleApply}
+                  >
+                    Appliquer
+                  </Button>
+                </div>
               </div>
             </div>
 

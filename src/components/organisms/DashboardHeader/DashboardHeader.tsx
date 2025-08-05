@@ -6,11 +6,13 @@ import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { useAuth } from '@/hooks/shared/useAuth';
+import { useDateFilters } from '@/hooks/dashboard/useDateFilters';
 import { Button } from '@/components/atoms/Button/Button';
 import { Badge } from '@/components/atoms/Badge/Badge';
 import { DateFilterButton } from '@/components/molecules/DateFilterButton/DateFilterButton';
 import { DateFilterDrawer } from '@/components/molecules/DateFilterDrawer/DateFilterDrawer';
-import { DateFilterState, DateUtils } from '@/types/dateFilters';
+import { PharmacyFilterButton } from '@/components/molecules/PharmacyFilterButton/PharmacyFilterButton';
+import { PharmacyFilterDrawer } from '@/components/molecules/PharmacyFilterDrawer/PharmacyFilterDrawer';
 import { Settings, LogOut } from 'lucide-react';
 
 interface DashboardHeaderProps {
@@ -21,32 +23,16 @@ interface DashboardHeaderProps {
  * DashboardHeader - Header spécialisé pour les pages dashboard
  * 
  * Design épuré avec logo ApoData à gauche, filtres au centre et user actions à droite
- * Gestion complète des périodes d'analyse et de comparaison
+ * Utilise le store global pour la gestion des dates
+ * Bouton pharmacies visible uniquement pour les admins
  */
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className = '' }) => {
   const router = useRouter();
   const { user, isLoading, role, pharmacyName } = useAuth();
-
-  // État initial des filtres
-  const [dateFilterState, setDateFilterState] = useState<DateFilterState>(() => {
-    const currentMonth = DateUtils.getCurrentMonth();
-    const previousPeriod = DateUtils.getPreviousPeriod(currentMonth);
-    
-    return {
-      analysisPeriod: {
-        type: 'current_month',
-        range: currentMonth,
-        label: 'Mois en cours'
-      },
-      comparisonPeriod: {
-        type: 'previous_period', 
-        range: previousPeriod,
-        label: 'Période précédente'
-      }
-    };
-  });
+  const { dateFilters, isLoading: dateLoading } = useDateFilters();
 
   const [isDateDrawerOpen, setIsDateDrawerOpen] = useState(false);
+  const [isPharmacyDrawerOpen, setIsPharmacyDrawerOpen] = useState(false);
 
   const handleLogoClick = (): void => {
     router.push('/dashboard');
@@ -59,11 +45,6 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className = ''
   const handleLogoutClick = async (): Promise<void> => {
     await signOut({ redirect: false });
     router.push('/');
-  };
-
-  const handleDateFilterChange = (newState: DateFilterState): void => {
-    setDateFilterState(newState);
-    console.log('Nouvelles périodes:', newState);
   };
 
   if (isLoading) {
@@ -127,15 +108,20 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className = ''
               
               {/* Filtre Date */}
               <DateFilterButton
-                filterState={dateFilterState}
+                filterState={dateFilters}
                 onClick={() => setIsDateDrawerOpen(true)}
+                loading={dateLoading}
               />
 
-              {/* Placeholder pour futurs filtres */}
-              <Button variant="secondary" size="md" disabled>
-                Pharmacies
-              </Button>
+              {/* Filtre Pharmacies - Visible uniquement pour admins */}
+              {role === 'admin' && (
+                <PharmacyFilterButton
+                  onClick={() => setIsPharmacyDrawerOpen(true)}
+                  selectedCount={0} // TODO: gérer la sélection
+                />
+              )}
 
+              {/* Placeholder pour filtre produits */}
               <Button variant="secondary" size="md" disabled>
                 Produits
               </Button>
@@ -211,9 +197,15 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className = ''
       <DateFilterDrawer
         isOpen={isDateDrawerOpen}
         onClose={() => setIsDateDrawerOpen(false)}
-        filterState={dateFilterState}
-        onFilterChange={handleDateFilterChange}
       />
+
+      {/* Pharmacy Filter Drawer - Seulement pour admins */}
+      {role === 'admin' && (
+        <PharmacyFilterDrawer
+          isOpen={isPharmacyDrawerOpen}
+          onClose={() => setIsPharmacyDrawerOpen(false)}
+        />
+      )}
     </>
   );
 };

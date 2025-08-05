@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/atoms/Button/Button';
 import { PharmacySearchInput } from '@/components/atoms/PharmacySearchInput/PharmacySearchInput';
-import { FranceRegionsMap } from '@/components/molecules/FranceRegionsMap/FranceRegionsMap';
 import { usePharmacyFiltersStore } from '@/store/pharmacyFiltersStore';
 import { 
   X, 
@@ -62,6 +61,22 @@ const EMPLOYEES_RANGES: { value: EmployeesRange; label: string }[] = [
   { value: '10-20', label: '10-20' },
   { value: '20-30', label: '20-30' },
   { value: '>30', label: '>30' },
+];
+
+const FRENCH_REGIONS: string[] = [
+  'Auvergne-Rhône-Alpes',
+  'Bourgogne-Franche-Comté', 
+  'Bretagne',
+  'Centre-Val de Loire',
+  'Corse',
+  'Grand Est',
+  'Hauts-de-France',
+  'Île-de-France',
+  'Normandie',
+  'Nouvelle-Aquitaine',
+  'Occitanie',
+  'Pays de la Loire',
+  'Provence-Alpes-Côte d\'Azur'
 ];
 
 export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
@@ -268,18 +283,6 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
 
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-gray-900 flex items-center">
-                      <MapPin className="w-4 h-4 mr-2" />
-                      Sélection par région
-                    </h3>
-                    <FranceRegionsMap
-                      selectedRegions={selectedRegions}
-                      onRegionClick={toggleRegionSelection}
-                      getPharmacyCount={(region) => getPharmaciesByRegion(region).length}
-                    />
-                  </div>
-
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-semibold text-gray-900 flex items-center">
                       <DollarSign className="w-4 h-4 mr-2" />
                       Chiffre d'affaires
                     </h3>
@@ -317,6 +320,31 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
                   </div>
 
                   <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-gray-900 flex items-center">
+                      <MapPin className="w-4 h-4 mr-2" />
+                      Régions
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {FRENCH_REGIONS.map((region) => {
+                        const isSelected = selectedRegions.includes(region);
+                        const pharmacyCount = getPharmaciesByRegion(region).length;
+                        
+                        return (
+                          <Button
+                            key={region}
+                            variant={isSelected ? 'primary' : 'secondary'}
+                            size="sm"
+                            onClick={() => toggleRegionSelection(region)}
+                            className="text-xs"
+                          >
+                            {region} ({pharmacyCount})
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-gray-900">
                       Pharmacies ({filteredPharmacies.length})
                     </h3>
@@ -327,7 +355,7 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
                         <p>Aucune pharmacie ne correspond aux critères</p>
                       </div>
                     ) : (
-                      <div className="space-y-2 max-h-96 overflow-y-auto">
+                      <div className="space-y-2 max-h-96 overflow-y-auto p-2">
                         {filteredPharmacies.map((pharmacy: Pharmacy) => {
                           const isSelected = selectedPharmacyIds.includes(pharmacy.id);
                           
@@ -390,7 +418,6 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
                       </div>
                     )}
                   </div>
-
                 </div>
               )}
             </div>

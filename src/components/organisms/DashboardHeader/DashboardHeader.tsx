@@ -13,6 +13,8 @@ import { DateFilterButton } from '@/components/molecules/DateFilterButton/DateFi
 import { DateFilterDrawer } from '@/components/molecules/DateFilterDrawer/DateFilterDrawer';
 import { PharmacyFilterButton } from '@/components/molecules/PharmacyFilterButton/PharmacyFilterButton';
 import { PharmacyFilterDrawer } from '@/components/molecules/PharmacyFilterDrawer/PharmacyFilterDrawer';
+import { ProductFilterButton } from '@/components/molecules/ProductFilterButton/ProductFilterButton';
+import { ProductFilterDrawer } from '@/components/molecules/ProductFilterDrawer/ProductFilterDrawer';
 import { Settings, LogOut } from 'lucide-react';
 
 interface DashboardHeaderProps {
@@ -33,6 +35,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className = ''
 
   const [isDateDrawerOpen, setIsDateDrawerOpen] = useState(false);
   const [isPharmacyDrawerOpen, setIsPharmacyDrawerOpen] = useState(false);
+  const [isProductDrawerOpen, setIsProductDrawerOpen] = useState(false);
 
   const handleLogoClick = (): void => {
     router.push('/dashboard');
@@ -121,10 +124,11 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className = ''
                 />
               )}
 
-              {/* Placeholder pour filtre produits */}
-              <Button variant="secondary" size="md" disabled>
-                Produits
-              </Button>
+              {/* Filtre Produits */}
+              <ProductFilterButton
+                onClick={() => setIsProductDrawerOpen(true)}
+                selectedCount={0} // TODO: gérer la sélection
+              />
 
             </div>
 
@@ -206,6 +210,12 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className = ''
           onClose={() => setIsPharmacyDrawerOpen(false)}
         />
       )}
+
+      {/* Product Filter Drawer */}
+      <ProductFilterDrawer
+        isOpen={isProductDrawerOpen}
+        onClose={() => setIsProductDrawerOpen(false)}
+      />
     </>
   );
 };

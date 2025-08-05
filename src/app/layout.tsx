@@ -2,6 +2,7 @@
 import type { Metadata } from 'next';
 import { SessionProvider } from '@/components/providers/SessionProvider';
 import './globals.css';
+import { HeaderProvider } from '@/components/providers/HeaderProvider';
 
 export const metadata: Metadata = {
   title: 'ApoData Genesis - Dashboard Pharmaceutique',
@@ -18,9 +19,11 @@ export default function RootLayout({ children }: RootLayoutProps): JSX.Element {
     <html lang="fr" className="scroll-smooth">
       <body className="min-h-screen bg-gray-50 antialiased">
         <SessionProvider>
-          <div id="root" className="min-h-screen">
-            {children}
-          </div>
+          <HeaderProvider>
+            <div id="root" className="min-h-screen">
+              {children}
+            </div>
+          </HeaderProvider>
         </SessionProvider>
       </body>
     </html>

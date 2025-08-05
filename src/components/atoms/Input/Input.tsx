@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 
 type InputVariant = 'default' | 'filled' | 'outlined' | 'ghost' | 'gradient';
 type InputSize = 'sm' | 'md' | 'lg';
-type InputType = 'text' | 'email' | 'password' | 'number' | 'tel' | 'url' | 'search';
+type InputType = 'text' | 'email' | 'password' | 'number' | 'tel' | 'url' | 'search' | 'date';
 
 interface InputProps {
   readonly variant?: InputVariant;
@@ -20,8 +20,8 @@ interface InputProps {
   readonly required?: boolean;
   readonly iconLeft?: React.ReactNode;
   readonly iconRight?: React.ReactNode;
-  readonly value?: string;
-  readonly defaultValue?: string;
+  readonly value?: string | undefined;
+  readonly defaultValue?: string | undefined;
   readonly onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
   readonly onFocus?: (event: React.FocusEvent<HTMLInputElement>) => void;
   readonly onBlur?: (event: React.FocusEvent<HTMLInputElement>) => void;

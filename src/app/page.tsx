@@ -1,17 +1,16 @@
 // src/app/page.tsx
 import React from 'react';
 import { AnimatedBackground } from '@/components/atoms/AnimatedBackground/AnimatedBackground';
-import { Header } from '@/components/organisms/Header/Header';
 import { Footer } from '@/components/organisms/Footer/Footer';
 import { HeroSection } from '@/components/organisms/HeroSection/HeroSection';
 import { DashboardFeaturesSection } from '@/components/organisms/DashboardFeaturesSection/DashboardFeaturesSection';
 import { AboutSection } from '@/components/organisms/AboutSection/AboutSection';
 
 /**
- * HomePage - Page d'accueil avec Header sticky et Footer
+ * HomePage - Page d'accueil sans header (géré par HeaderProvider)
  * 
- * Layout principal avec header glass effect sticky, 
- * hero section, features dashboard, about section et footer fixe
+ * Layout principal avec hero section, features dashboard, about section et footer
+ * Header géré automatiquement par HeaderProvider selon la route
  */
 export default function HomePage(): JSX.Element {
   return (
@@ -19,11 +18,8 @@ export default function HomePage(): JSX.Element {
       {/* Background animé avec blobs */}
       <AnimatedBackground />
       
-      {/* Header sticky */}
-      <Header />
-      
-      {/* Contenu principal avec padding pour header/footer */}
-      <main className="relative z-10 pt-16 pb-20">
+      {/* Contenu principal avec padding pour footer */}
+      <main className="relative z-10 pb-20">
         {/* Hero Section */}
         <section id="home" className="min-h-screen flex items-center justify-center">
           <HeroSection />

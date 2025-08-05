@@ -154,7 +154,7 @@ export default function LoginPage(): JSX.Element {
             className="w-full max-w-md"
           >
             
-            <div className="mt-12 mb-6">
+            <div className='mb-4'>
               <Link 
                 href="/"
                 className="inline-flex items-center text-gray-600 hover:text-gray-900 transition-colors duration-200"

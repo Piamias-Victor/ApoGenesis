@@ -68,7 +68,7 @@ export const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
   // Debounced search après 3 caractères
   useEffect(() => {
     if (searchTerm.length < 3) {
-      setSearchResults([]);
+      // NE PAS vider searchResults ici - gardons les résultats précédents
       setIsDropdownOpen(false);
       return;
     }
@@ -109,7 +109,7 @@ export const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
       const data: ProductsResponse = await response.json();
 
       if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Erreur de recherche');
+        throw new Error('Erreur de recherche');
       }
 
       setSearchResults(data.data);
@@ -119,7 +119,7 @@ export const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
     } catch (err) {
       console.error('Erreur recherche produits:', err);
       setError(err instanceof Error ? err.message : 'Erreur de recherche');
-      setSearchResults([]);
+      // NE PAS vider searchResults en cas d'erreur non plus
       setIsDropdownOpen(false);
     } finally {
       setLoading(false);
@@ -136,6 +136,12 @@ export const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
 
   const handleRemoveProduct = (code_13_ref: string): void => {
     toggleProductSelection(code_13_ref);
+  };
+
+  const handleClearSearch = (): void => {
+    setSearchTerm('');
+    setIsDropdownOpen(false);
+    inputRef.current?.focus();
   };
 
   const selectedProducts = getSelectedProducts();
@@ -187,6 +193,9 @@ export const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
     );
   };
 
+  // Déterminer si on doit afficher la liste des sélectionnés
+  const shouldShowSelectedList = selectedProducts.length > 0;
+
   return (
     <div className={`space-y-4 ${className}`}>
       <div ref={containerRef} className="relative">
@@ -202,18 +211,36 @@ export const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
             value={searchTerm}
             onChange={handleInputChange}
             onFocus={() => {
-              if (searchResults.length > 0) {
+              if (searchResults.length > 0 && searchTerm.length >= 3) {
                 setIsDropdownOpen(true);
               }
             }}
             placeholder={getSearchPlaceholder()}
             className="
-              w-full pl-10 pr-4 py-3 text-sm rounded-lg border-2 border-gray-300
+              w-full pl-10 pr-12 py-3 text-sm rounded-lg border-2 border-gray-300
               bg-white text-gray-900 placeholder:text-gray-400
               hover:border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20
               focus:outline-none transition-all duration-200 ease-in-out
             "
           />
+
+          {/* Bouton clear search */}
+          {searchTerm && (
+            <motion.button
+              type="button"
+              onClick={handleClearSearch}
+              className="
+                absolute right-16 top-1/2 transform -translate-y-1/2
+                text-gray-400 hover:text-gray-600 transition-colors duration-200
+              "
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+            >
+              <X className="w-4 h-4" />
+            </motion.button>
+          )}
 
           {/* Indicateur de type de recherche */}
           <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
@@ -231,7 +258,7 @@ export const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
 
         {/* Loading indicator */}
         {isLoading && (
-          <div className="absolute right-16 top-1/2 transform -translate-y-1/2">
+          <div className="absolute right-20 top-1/2 transform -translate-y-1/2">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
           </div>
         )}
@@ -334,8 +361,8 @@ export const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
         </AnimatePresence>
       </div>
 
-      {/* Liste des produits sélectionnés */}
-      {selectedProducts.length > 0 && (
+      {/* Liste des produits sélectionnés - TOUJOURS VISIBLE si il y a des sélections */}
+      {shouldShowSelectedList && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}

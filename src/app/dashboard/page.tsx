@@ -6,17 +6,23 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/shared/useAuth';
 import { Card } from '@/components/atoms/Card/Card';
 import { Badge } from '@/components/atoms/Badge/Badge';
+import { AnimatedBackground } from '@/components/atoms/AnimatedBackground/AnimatedBackground';
 import { ActiveFiltersBar } from '@/components/molecules/ActiveFiltersBar/ActiveFiltersBar';
 import { DateFilterDrawer } from '@/components/molecules/DateFilterDrawer/DateFilterDrawer';
 import { PharmacyFilterDrawer } from '@/components/molecules/PharmacyFilterDrawer/PharmacyFilterDrawer';
 import { ProductFilterDrawer } from '@/components/molecules/ProductFilterDrawer/ProductFilterDrawer';
+
 import { redirect } from 'next/navigation';
+import ChartSection from '@/components/organisms/ChartSection/ChartSection';
+import KPISection from '@/components/organisms/KPISection/KPISection';
+import Top100Section from '@/components/organisms/Top100Section/Top100Section';
 
 /**
- * Dashboard Page - Page principale avec filtres actifs
+ * Dashboard Page - Page principale avec filtres actifs et AnimatedBackground
  * 
  * Mobile-first responsive avec ActiveFiltersBar au-dessus des KPIs
  * Grid KPIs : 1 col mobile, 2 cols tablet, 3 cols desktop
+ * Background animé identique à la homepage
  */
 export default function DashboardPage(): JSX.Element {
   const { user, isAuthenticated, isLoading, role, pharmacyName } = useAuth();
@@ -31,13 +37,16 @@ export default function DashboardPage(): JSX.Element {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto py-6 sm:py-8">
+      <div className="min-h-screen bg-gray-50 relative overflow-hidden">
+        {/* Background animé même pendant loading */}
+        <AnimatedBackground />
+        
+        <div className="relative z-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto py-6 sm:py-8">
           <div className="space-y-4 sm:space-y-6">
-            <div className="w-48 sm:w-64 h-6 sm:h-8 bg-gray-200 rounded animate-pulse" />
-            <div className="h-12 bg-gray-200 rounded animate-pulse" />
+            <div className="w-48 sm:w-64 h-6 sm:h-8 bg-white/80 rounded animate-pulse" />
+            <div className="h-12 bg-white/80 rounded animate-pulse" />
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-              {[1, 2, 3].map((i) => (
+              {[1, 2, 3, 4, 5, 6].map((i) => (
                 <Card key={i} variant="elevated" padding="lg">
                   <div className="space-y-3">
                     <div className="w-20 sm:w-24 h-4 bg-gray-200 rounded animate-pulse" />
@@ -55,8 +64,11 @@ export default function DashboardPage(): JSX.Element {
 
   return (
     <>
-      <div className="min-h-screen bg-gray-50">
-        <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto py-6 sm:py-8">
+      <div className="min-h-screen bg-gray-50 relative overflow-hidden">
+        {/* Background animé identique homepage */}
+        <AnimatedBackground />
+        
+        <div className="relative z-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto py-6 sm:py-8">
           
           {/* Welcome Section */}
           <motion.div
@@ -108,84 +120,21 @@ export default function DashboardPage(): JSX.Element {
             />
           </motion.div>
 
-          {/* Quick Stats Preview - Responsive Grid */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8"
-          >
-            
-            {/* KPI Sell-Out */}
-            <Card variant="elevated" padding="lg" className="order-1">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wide">
-                    CA Sell-Out
-                  </h3>
-                  <div className="w-3 h-3 bg-green-500 rounded-full flex-shrink-0" />
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xl sm:text-2xl font-bold text-gray-900">
-                    245 850 €
-                  </div>
-                  <div className="flex items-center text-xs sm:text-sm">
-                    <span className="text-green-600 font-medium">+12.5%</span>
-                    <span className="text-gray-500 ml-1">vs période précédente</span>
-                  </div>
-                </div>
-              </div>
-            </Card>
+          {/* KPIs Section - 6 KPIs */}
+          <KPISection />
 
-            {/* KPI Sell-In */}
-            <Card variant="elevated" padding="lg" className="order-2">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wide">
-                    CA Sell-In
-                  </h3>
-                  <div className="w-3 h-3 bg-blue-500 rounded-full flex-shrink-0" />
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xl sm:text-2xl font-bold text-gray-900">
-                    189 420 €
-                  </div>
-                  <div className="flex items-center text-xs sm:text-sm">
-                    <span className="text-orange-600 font-medium">-2.1%</span>
-                    <span className="text-gray-500 ml-1">vs période précédente</span>
-                  </div>
-                </div>
-              </div>
-            </Card>
+          {/* Chart Section - Evolution CA */}
+          <ChartSection />
 
-            {/* KPI Stock */}
-            <Card variant="elevated" padding="lg" className="order-3 sm:col-span-2 lg:col-span-1">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wide">
-                    Stock Valorisé
-                  </h3>
-                  <div className="w-3 h-3 bg-purple-500 rounded-full flex-shrink-0" />
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xl sm:text-2xl font-bold text-gray-900">
-                    89 640 €
-                  </div>
-                  <div className="flex items-center text-xs sm:text-sm">
-                    <span className="text-green-600 font-medium">+8.3%</span>
-                    <span className="text-gray-500 ml-1">optimal</span>
-                  </div>
-                </div>
-              </div>
-            </Card>
-
-          </motion.div>
+          {/* Top 100 Section - Produits/Labs/Catégories */}
+          <Top100Section />
 
           {/* Coming Soon Section */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.4, ease: 'easeOut' }}
+            className="mt-8"
           >
             <Card variant="gradient" padding="xl">
               <div className="text-center space-y-4">
@@ -210,12 +159,6 @@ export default function DashboardPage(): JSX.Element {
             </Card>
           </motion.div>
 
-          <div className="mt-8 sm:mt-12 text-center sm:hidden">
-            <p className="text-xs text-gray-500">
-              Interface optimisée • Desktop recommandé pour plus de fonctionnalités
-            </p>
-          </div>
-
         </div>
       </div>
 
@@ -225,12 +168,10 @@ export default function DashboardPage(): JSX.Element {
         onClose={() => setIsDateDrawerOpen(false)}
       />
 
-      {role === 'admin' && (
-        <PharmacyFilterDrawer
-          isOpen={isPharmacyDrawerOpen}
-          onClose={() => setIsPharmacyDrawerOpen(false)}
-        />
-      )}
+      <PharmacyFilterDrawer
+        isOpen={isPharmacyDrawerOpen}
+        onClose={() => setIsPharmacyDrawerOpen(false)}
+      />
 
       <ProductFilterDrawer
         isOpen={isProductDrawerOpen}

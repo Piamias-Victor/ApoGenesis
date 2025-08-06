@@ -135,7 +135,6 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className = ''
               {role === 'admin' && (
                 <PharmacyFilterButton
                   onClick={() => setIsPharmacyDrawerOpen(true)}
-                  selectedCount={0}
                 />
               )}
 

@@ -22,10 +22,11 @@ interface DateFilterDrawerProps {
 }
 
 /**
- * DateFilterDrawer - Drawer de sélection des périodes d'analyse et de comparaison
+ * DateFilterDrawer - Drawer responsive de sélection des périodes
  * 
- * Utilise directement le store global Zustand pour la gestion d'état
- * Les changements sont appliqués uniquement au clic "Appliquer"
+ * Mobile: Full width, mobile-first UX
+ * Desktop: 500px width comme avant
+ * Utilise breakpoints Tailwind pour adaptation
  */
 export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
   isOpen,
@@ -38,15 +39,12 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
     resetToDefaults 
   } = useDateFilters();
 
-  // État local temporaire pour les modifications avant validation
   const [localAnalysisPeriod, setLocalAnalysisPeriod] = useState<AnalysisPeriod>(dateFilters.analysisPeriod);
   const [localComparisonPeriod, setLocalComparisonPeriod] = useState<ComparisonPeriod>(dateFilters.comparisonPeriod);
 
-  // Prevent body scroll when drawer is open
   React.useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
-      // Synchroniser l'état local avec le store global à l'ouverture
       setLocalAnalysisPeriod(dateFilters.analysisPeriod);
       setLocalComparisonPeriod(dateFilters.comparisonPeriod);
     } else {
@@ -89,7 +87,6 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
 
     setLocalAnalysisPeriod(newAnalysisPeriod);
 
-    // Recalculer automatiquement la période de comparaison si nécessaire
     if (localComparisonPeriod.type === 'previous_period') {
       setLocalComparisonPeriod({
         type: 'previous_period',
@@ -131,7 +128,6 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
   };
 
   const handleApply = (): void => {
-    // Appliquer les changements au store global
     setFilters({
       analysisPeriod: localAnalysisPeriod,
       comparisonPeriod: localComparisonPeriod
@@ -140,7 +136,6 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
   };
 
   const handleCancel = (): void => {
-    // Annuler les changements locaux
     setLocalAnalysisPeriod(dateFilters.analysisPeriod);
     setLocalComparisonPeriod(dateFilters.comparisonPeriod);
     onClose();
@@ -166,8 +161,8 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
 
           <motion.div
             className={`
-              fixed top-0 right-0 h-full w-[500px] bg-white shadow-2xl z-50
-              flex flex-col ${className}
+              fixed top-0 right-0 h-full bg-white shadow-2xl z-50
+              w-full sm:w-[900px] flex flex-col ${className}
             `}
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
@@ -176,9 +171,9 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
           >
             
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
                   Périodes d'analyse
                 </h2>
                 <p className="text-sm text-gray-500 mt-1">
@@ -187,8 +182,7 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
                 <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-xs text-blue-800">
                     💡 <strong>Astuce :</strong> Choisissez votre période d'analyse principale, puis sélectionnez 
-                    la période de comparaison pour calculer les évolutions. Les choix rapides 
-                    recalculent automatiquement les comparaisons.
+                    la période de comparaison pour calculer les évolutions.
                   </p>
                 </div>
               </div>
@@ -197,7 +191,7 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
                 onClick={handleCancel}
                 className="
                   p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100
-                  transition-colors duration-200 flex-shrink-0
+                  transition-colors duration-200 flex-shrink-0 ml-4
                 "
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
@@ -206,19 +200,19 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
               </motion.button>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 p-6 overflow-y-auto space-y-8">
+            {/* Content - Scrollable */}
+            <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-6 sm:space-y-8">
               
               {/* Section 1: Période d'analyse */}
               <div className="space-y-4">
                 <div className="flex items-center space-x-2">
                   <Calendar className="w-5 h-5 text-blue-600" />
-                  <h3 className="text-lg font-semibold text-gray-900">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900">
                     Période d'analyse
                   </h3>
                 </div>
                 
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
                   <p className="text-sm text-blue-800 mb-2">
                     <strong>Sélectionnée :</strong> {localAnalysisPeriod.label}
                   </p>
@@ -257,7 +251,7 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
 
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-gray-700">Période personnalisée</p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <Input
                       variant="default"
                       size="sm"
@@ -302,12 +296,12 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
               <div className="space-y-4">
                 <div className="flex items-center space-x-2">
                   <TrendingUp className="w-5 h-5 text-green-600" />
-                  <h3 className="text-lg font-semibold text-gray-900">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900">
                     Période de comparaison
                   </h3>
                 </div>
                 
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4">
                   <p className="text-sm text-green-800 mb-2">
                     <strong>Comparaison :</strong> {localComparisonPeriod.label}
                   </p>
@@ -338,7 +332,7 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
 
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-gray-700">Comparaison personnalisée</p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <Input
                       variant="default"
                       size="sm"
@@ -382,21 +376,23 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
             </div>
 
             {/* Footer */}
-            <div className="p-6 border-t border-gray-200 bg-gray-50">
-              <div className="flex items-center justify-between">
+            <div className="p-4 sm:p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex flex-col sm:flex-row items-center justify-between space-y-3 sm:space-y-0">
                 <Button
                   variant="ghost"
                   size="md"
                   onClick={handleReset}
+                  className="w-full sm:w-auto"
                 >
                   Réinitialiser
                 </Button>
                 
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3 w-full sm:w-auto">
                   <Button
                     variant="secondary"
                     size="md"
                     onClick={handleCancel}
+                    className="flex-1 sm:flex-none"
                   >
                     Annuler
                   </Button>
@@ -404,6 +400,7 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
                     variant="primary"
                     size="md"
                     onClick={handleApply}
+                    className="flex-1 sm:flex-none"
                   >
                     Appliquer
                   </Button>

@@ -11,10 +11,11 @@ interface HeaderProviderProps {
 }
 
 /**
- * HeaderProvider - Gère l'affichage conditionnel des headers
+ * HeaderProvider - Gère l'affichage conditionnel des headers avec responsive
  * 
  * Affiche HomeHeader pour la homepage et login
  * Affiche DashboardHeader pour toutes les routes dashboard
+ * Padding adaptatif selon header : mobile h-14, desktop h-16
  */
 export const HeaderProvider: React.FC<HeaderProviderProps> = ({ children }) => {
   const pathname = usePathname();
@@ -40,7 +41,8 @@ export const HeaderProvider: React.FC<HeaderProviderProps> = ({ children }) => {
   return (
     <>
       {renderHeader()}
-      <div className={shouldShowHeader ? 'pt-16' : ''}>
+      {/* Padding top responsive : h-14 mobile, h-16 desktop */}
+      <div className={shouldShowHeader ? 'pt-14 sm:pt-16' : ''}>
         {children}
       </div>
     </>

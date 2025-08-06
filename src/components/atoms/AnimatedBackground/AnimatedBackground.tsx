@@ -11,7 +11,7 @@ export const AnimatedBackground: React.FC = () => {
       
       {/* Blob 1 - Coin haut gauche */}
       <motion.div
-        className="absolute w-80 h-72 bg-gradient-to-br from-blue-400/70 via-cyan-300/50 to-sky-200/40 filter blur-xl"
+        className="-z-10 absolute w-80 h-72 bg-gradient-to-br from-blue-400/70 via-cyan-300/50 to-sky-200/40 filter blur-xl"
         style={{ 
           left: '-10%', 
           top: '-5%',

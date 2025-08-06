@@ -79,6 +79,13 @@ const FRENCH_REGIONS: string[] = [
   'Provence-Alpes-Côte d\'Azur'
 ];
 
+/**
+ * PharmacyFilterDrawer - Drawer responsive de sélection des pharmacies
+ * 
+ * Mobile: Full width avec sections empilées
+ * Desktop: 800px width comme avant
+ * UX optimisée pour touch sur mobile
+ */
 export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
   isOpen,
   onClose,
@@ -170,8 +177,8 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
 
           <motion.div
             className={`
-              fixed top-0 right-0 h-full w-[800px] bg-white shadow-2xl z-50
-              flex flex-col ${className}
+              fixed top-0 right-0 h-full bg-white shadow-2xl z-50
+              w-full sm:w-[800px] flex flex-col ${className}
             `}
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
@@ -179,14 +186,15 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
             transition={{ duration: 0.4, ease: 'easeInOut' }}
           >
             
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <div className="flex items-center space-x-3">
-                <Building2 className="w-6 h-6 text-blue-600" />
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-900">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
+              <div className="flex items-center space-x-3 min-w-0 flex-1">
+                <Building2 className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                <div className="min-w-0">
+                  <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
                     Sélection Pharmacies
                   </h2>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <p className="text-sm text-gray-500 mt-1 truncate">
                     {selectedCount > 0 
                       ? `${selectedCount} pharmacie(s) sélectionnée(s) sur ${filteredPharmacies.length}`
                       : `${filteredPharmacies.length} pharmacie(s) disponible(s)`
@@ -197,7 +205,7 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
               
               <motion.button
                 onClick={onClose}
-                className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors duration-200 flex-shrink-0"
+                className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors duration-200 flex-shrink-0 ml-4"
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
               >
@@ -205,6 +213,7 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
               </motion.button>
             </div>
 
+            {/* Content - Scrollable */}
             <div className="flex-1 overflow-y-auto">
               
               {isLoading && (
@@ -217,7 +226,7 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
               )}
 
               {error && !isLoading && (
-                <div className="p-6">
+                <div className="p-4 sm:p-6">
                   <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                     <div className="flex items-start space-x-3">
                       <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
@@ -233,8 +242,9 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
               )}
 
               {!isLoading && !error && (
-                <div className="space-y-6 p-6">
+                <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
                   
+                  {/* Recherche */}
                   <div className="space-y-2">
                     <h3 className="text-sm font-semibold text-gray-900 flex items-center">
                       <Building2 className="w-4 h-4 mr-2" />
@@ -251,8 +261,9 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
                     />
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
+                  {/* Actions rapides */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-3 sm:space-y-0">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Button
                         variant="secondary"
                         size="sm"
@@ -281,6 +292,7 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
                     </Button>
                   </div>
 
+                  {/* Filtres CA */}
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-gray-900 flex items-center">
                       <DollarSign className="w-4 h-4 mr-2" />
@@ -300,6 +312,7 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
                     </div>
                   </div>
 
+                  {/* Filtres Employés */}
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-gray-900 flex items-center">
                       <Users className="w-4 h-4 mr-2" />
@@ -319,6 +332,7 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
                     </div>
                   </div>
 
+                  {/* Filtres Régions */}
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-gray-900 flex items-center">
                       <MapPin className="w-4 h-4 mr-2" />
@@ -344,6 +358,7 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
                     </div>
                   </div>
 
+                  {/* Liste pharmacies */}
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-gray-900">
                       Pharmacies ({filteredPharmacies.length})
@@ -355,7 +370,7 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
                         <p>Aucune pharmacie ne correspond aux critères</p>
                       </div>
                     ) : (
-                      <div className="space-y-2 max-h-96 overflow-y-auto p-2">
+                      <div className="space-y-2 max-h-80 sm:max-h-96 overflow-y-auto p-2">
                         {filteredPharmacies.map((pharmacy: Pharmacy) => {
                           const isSelected = selectedPharmacyIds.includes(pharmacy.id);
                           
@@ -375,7 +390,7 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
                               whileTap={{ scale: 0.99 }}
                             >
                               <div className={`
-                                w-5 h-5 rounded border-2 flex items-center justify-center mt-0.5
+                                w-5 h-5 rounded border-2 flex items-center justify-center mt-0.5 flex-shrink-0
                                 ${isSelected 
                                   ? 'bg-blue-500 border-blue-500' 
                                   : 'border-gray-300'
@@ -387,8 +402,8 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
                               </div>
                               
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-start justify-between">
-                                  <div>
+                                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
+                                  <div className="min-w-0 flex-1">
                                     <h4 className="font-medium text-gray-900 truncate">
                                       {pharmacy.name || 'Nom non renseigné'}
                                     </h4>
@@ -402,8 +417,8 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
                                     )}
                                   </div>
                                   
-                                  <div className="text-right flex-shrink-0 ml-4">
-                                    <div className="text-sm font-medium text-gray-900">
+                                  <div className="flex sm:flex-col items-start sm:items-end mt-2 sm:mt-0 sm:ml-4 flex-shrink-0">
+                                    <div className="text-sm font-medium text-gray-900 mr-4 sm:mr-0">
                                       {formatCA(pharmacy.ca)}
                                     </div>
                                     <div className="text-xs text-gray-500">
@@ -422,9 +437,10 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
               )}
             </div>
 
-            <div className="p-6 border-t border-gray-200 bg-gray-50">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-600">
+            {/* Footer */}
+            <div className="p-4 sm:p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex flex-col sm:flex-row items-center justify-between space-y-3 sm:space-y-0">
+                <div className="text-sm text-gray-600 text-center sm:text-left">
                   {selectedCount > 0 && (
                     <span className="font-medium text-blue-600">
                       {selectedCount} pharmacie(s) sélectionnée(s)
@@ -432,11 +448,12 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
                   )}
                 </div>
                 
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3 w-full sm:w-auto">
                   <Button
                     variant="secondary"
                     size="md"
                     onClick={onClose}
+                    className="flex-1 sm:flex-none"
                   >
                     Annuler
                   </Button>
@@ -445,6 +462,7 @@ export const PharmacyFilterDrawer: React.FC<PharmacyFilterDrawerProps> = ({
                     size="md"
                     onClick={handleApply}
                     disabled={selectedCount === 0}
+                    className="flex-1 sm:flex-none"
                   >
                     Appliquer ({selectedCount})
                   </Button>

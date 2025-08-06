@@ -8,7 +8,7 @@ import { signOut } from 'next-auth/react';
 import { useAuth } from '@/hooks/shared/useAuth';
 import { useDateFilters } from '@/hooks/dashboard/useDateFilters';
 import { Button } from '@/components/atoms/Button/Button';
-import { Badge } from '@/components/atoms/Badge/Badge';
+import { ContextSwitcher } from '@/components/molecules/ContextSwitcher/ContextSwitcher';
 import { DateFilterButton } from '@/components/molecules/DateFilterButton/DateFilterButton';
 import { DateFilterDrawer } from '@/components/molecules/DateFilterDrawer/DateFilterDrawer';
 import { PharmacyFilterButton } from '@/components/molecules/PharmacyFilterButton/PharmacyFilterButton';
@@ -19,10 +19,7 @@ import {
   Settings, 
   LogOut, 
   Menu, 
-  X, 
-  Calendar,
-  Building2,
-  Package
+  X
 } from 'lucide-react';
 
 interface DashboardHeaderProps {
@@ -30,11 +27,11 @@ interface DashboardHeaderProps {
 }
 
 /**
- * DashboardHeader - Header responsive pour dashboard
+ * DashboardHeader - Header responsive pour dashboard avec ContextSwitcher
  * 
- * Desktop: Logo gauche, filtres centre, user actions droite
- * Mobile: Logo + hamburger, filtres dans menu mobile
- * Utilise Tailwind responsive classes pour adaptation automatique
+ * Desktop: Logo + ContextSwitcher gauche, filtres centre, user actions droite
+ * Mobile: Logo + ContextSwitcher + hamburger, filtres dans menu mobile
+ * ContextSwitcher remplace l'ancien logo+badge par navigation contextuelle
  */
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className = '' }) => {
   const router = useRouter();
@@ -45,10 +42,6 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className = ''
   const [isPharmacyDrawerOpen, setIsPharmacyDrawerOpen] = useState(false);
   const [isProductDrawerOpen, setIsProductDrawerOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  const handleLogoClick = (): void => {
-    router.push('/dashboard');
-  };
 
   const handleSettingsClick = (): void => {
     console.log('Paramètres dashboard');
@@ -71,17 +64,16 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className = ''
       `}>
         <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
           <div className="flex items-center justify-between h-14 sm:h-16">
-            <div className="w-20 sm:w-24 h-6 sm:h-8 bg-gray-200 rounded animate-pulse" />
+            <div className="flex items-center space-x-4">
+              <div className="w-20 sm:w-24 h-6 sm:h-8 bg-gray-200 rounded animate-pulse" />
+              <div className="w-32 sm:w-40 h-8 bg-gray-200 rounded animate-pulse" />
+            </div>
             <div className="hidden md:flex items-center space-x-2 lg:space-x-3">
               <div className="w-28 lg:w-32 h-8 bg-gray-200 rounded animate-pulse" />
-              <div className="w-28 lg:w-32 h-8 bg-gray-200 rounded animate-pulse" />
-              <div className="w-28 lg:w-32 h-8 bg-gray-200 rounded animate-pulse" />
+              <div className="w-24 lg:w-28 h-8 bg-gray-200 rounded animate-pulse" />
+              <div className="w-20 lg:w-24 h-8 bg-gray-200 rounded animate-pulse" />
             </div>
-            <div className="flex items-center space-x-2 sm:space-x-3">
-              <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse" />
-              <div className="hidden sm:block w-16 lg:w-20 h-4 bg-gray-200 rounded animate-pulse" />
-              <div className="w-8 h-8 bg-gray-200 rounded animate-pulse" />
-            </div>
+            <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse" />
           </div>
         </div>
       </header>
@@ -93,20 +85,19 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className = ''
       <motion.header
         className={`
           fixed top-0 left-0 right-0 z-50 
-          bg-white border-b border-gray-200 shadow-soft
+          bg-white/95 backdrop-blur-sm border-b border-gray-200
+          shadow-soft transition-all duration-300
           ${className}
         `}
         initial={{ y: -100 }}
         animate={{ y: 0 }}
-        transition={{ duration: 0.4, ease: 'easeOut' }}
+        transition={{ duration: 0.5, ease: 'easeOut' }}
       >
         <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
           <div className="flex items-center justify-between h-14 sm:h-16">
-            
-            {/* Logo ApoData - Gauche */}
+            {/* Section gauche : Logo + Badge avec dropdown */}
             <div className="flex items-center">
               <motion.button
-                onClick={handleLogoClick}
                 className="flex items-center"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -115,235 +106,192 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className = ''
                 <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                   ApoData
                 </h1>
-                <Badge variant="success" size="xs" className="ml-2 sm:ml-3 hidden sm:block">
-                  Dashboard
-                </Badge>
+                <ContextSwitcher className="ml-2 sm:ml-3 hidden sm:block" />
               </motion.button>
             </div>
 
-            {/* Filtres - Centre Desktop seulement */}
-            <div className="hidden lg:flex items-center space-x-3 xl:space-x-4">
-              
-              {/* Filtre Date */}
+            {/* Section centre : Filtres Desktop */}
+            <div className="hidden md:flex items-center space-x-2 lg:space-x-3">
               <DateFilterButton
                 filterState={dateFilters}
                 onClick={() => setIsDateDrawerOpen(true)}
                 loading={dateLoading}
               />
-
-              {/* Filtre Pharmacies - Visible uniquement pour admins */}
+              
               {role === 'admin' && (
                 <PharmacyFilterButton
                   onClick={() => setIsPharmacyDrawerOpen(true)}
                 />
               )}
-
-              {/* Filtre Produits + Laboratoires */}
+              
               <ProductFilterButton
                 onClick={() => setIsProductDrawerOpen(true)}
               />
-
             </div>
 
-            {/* Actions Droite */}
-            <div className="flex items-center space-x-2 sm:space-x-3 lg:space-x-4">
-              
-              {/* Filtres Mobile - Medium screens */}
-              <div className="flex md:hidden lg:hidden items-center space-x-1">
-                <motion.button
-                  onClick={() => setIsDateDrawerOpen(true)}
-                  className="p-2 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors duration-200"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  title="Filtres de date"
-                >
-                  <Calendar className="w-5 h-5" />
-                </motion.button>
-                
-                {role === 'admin' && (
-                  <motion.button
-                    onClick={() => setIsPharmacyDrawerOpen(true)}
-                    className="p-2 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors duration-200"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    title="Filtres pharmacies"
-                  >
-                    <Building2 className="w-5 h-5" />
-                  </motion.button>
-                )}
-                
-                <motion.button
-                  onClick={() => setIsProductDrawerOpen(true)}
-                  className="p-2 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors duration-200"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  title="Filtres produits"
-                >
-                  <Package className="w-5 h-5" />
-                </motion.button>
-              </div>
-
-              {/* User Avatar */}
+            {/* Section droite : User + Mobile Menu */}
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              {/* User Info Desktop */}
               {user?.name && (
-                <div className="flex items-center space-x-2 sm:space-x-3">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                    <span className="text-white text-xs sm:text-sm font-semibold">
+                <div className="hidden lg:flex items-center space-x-3">
+                  <div className="text-right">
+                    <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                    <div className="text-xs text-gray-500">
+                      {role === 'admin' ? 'Administrateur' : pharmacyName}
+                    </div>
+                  </div>
+                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                    <span className="text-white text-sm font-semibold">
                       {user.name.charAt(0).toUpperCase()}
                     </span>
-                  </div>
-                  
-                  {/* User Info - Desktop only */}
-                  <div className="hidden md:block lg:block">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-medium text-gray-900 text-sm">
-                        {user.name}
-                      </span>
-                      {role === 'admin' ? (
-                        <Badge variant="gradient-purple" size="xs">
-                          Admin
-                        </Badge>
-                      ) : (
-                        pharmacyName && (
-                          <Badge variant="gray" size="xs" className="max-w-[120px] truncate">
-                            {pharmacyName}
-                          </Badge>
-                        )
-                      )}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {role === 'admin' ? 'Accès multi-pharmacies' : 'Pharmacien'}
-                    </div>
                   </div>
                 </div>
               )}
 
-              {/* Desktop Actions */}
-              <div className="hidden sm:flex items-center space-x-1">
-                <div className="h-6 w-px bg-gray-200 mx-1" />
-                
-                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    iconLeft={<Settings className="w-4 h-4" />}
-                    onClick={handleSettingsClick}
-                  />
-                </motion.div>
-                
-                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    iconLeft={<LogOut className="w-4 h-4" />}
-                    onClick={handleLogoutClick}
-                  />
-                </motion.div>
-              </div>
-
-              {/* Menu Hamburger Mobile */}
-              <div className="sm:hidden">
-                <motion.button
-                  onClick={toggleMobileMenu}
-                  className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors duration-200"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+              {/* Actions Desktop */}
+              <div className="hidden md:flex items-center space-x-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSettingsClick}
+                  className="p-2"
+                  aria-label="Paramètres"
                 >
-                  {isMobileMenuOpen ? (
-                    <X className="w-5 h-5" />
-                  ) : (
-                    <Menu className="w-5 h-5" />
-                  )}
-                </motion.button>
+                  <Settings className="w-4 h-4" />
+                </Button>
+                
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleLogoutClick}
+                  className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  aria-label="Se déconnecter"
+                >
+                  <LogOut className="w-4 h-4" />
+                </Button>
               </div>
-            </div>
 
+              {/* Menu Mobile Toggle */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="md:hidden p-2"
+                onClick={toggleMobileMenu}
+                aria-label="Menu"
+              >
+                {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+              </Button>
+            </div>
           </div>
 
-          {/* Menu Mobile */}
-          <AnimatePresence>
-            {isMobileMenuOpen && (
-              <motion.div
-                className="sm:hidden border-t border-gray-200 bg-white"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.3, ease: 'easeInOut' }}
-              >
-                <div className="py-4 space-y-2">
-                  
-                  {/* User Info Mobile */}
-                  {user?.name && (
-                    <div className="px-4 py-3 bg-gray-50 rounded-lg mx-4 mb-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                          <span className="text-white text-sm font-semibold">
-                            {user.name.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                        <div>
-                          <div className="font-medium text-gray-900 text-sm">{user.name}</div>
-                          <div className="text-xs text-gray-500">
-                            {role === 'admin' ? 'Administrateur' : pharmacyName}
-                          </div>
-                        </div>
+          {/* Supprimé - ContextSwitcher maintenant dans le logo et burger menu */}
+        </div>
+
+        {/* Menu Mobile */}
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <motion.div
+              className="md:hidden border-t border-gray-200 bg-white"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3, ease: 'easeInOut' }}
+            >
+              <div className="px-4 py-4 space-y-3">
+                {/* User Info Mobile */}
+                {user?.name && (
+                  <div className="flex items-center space-x-3 pb-3 border-b border-gray-100">
+                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                      <span className="text-white font-semibold">
+                        {user.name.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="font-medium text-gray-900">{user.name}</div>
+                      <div className="text-sm text-gray-500">
+                        {role === 'admin' ? 'Administrateur' : pharmacyName}
                       </div>
                     </div>
-                  )}
-
-                  {/* Actions Mobile */}
-                  <div className="px-4 space-y-2">
-                    <Button
-                      variant="ghost"
-                      size="md"
-                      fullWidth
-                      iconLeft={<Settings className="w-4 h-4" />}
-                      onClick={() => {
-                        handleSettingsClick();
-                        setIsMobileMenuOpen(false);
-                      }}
-                      className="justify-start"
-                    >
-                      Paramètres
-                    </Button>
-                    
-                    <Button
-                      variant="secondary"
-                      size="md"
-                      fullWidth
-                      iconLeft={<LogOut className="w-4 h-4" />}
-                      onClick={() => {
-                        handleLogoutClick();
-                        setIsMobileMenuOpen(false);
-                      }}
-                      className="justify-start"
-                    >
-                      Déconnexion
-                    </Button>
                   </div>
+                )}
 
+                {/* ContextSwitcher Mobile */}
+                <div className="pb-3 border-b border-gray-100">
+                  <ContextSwitcher />
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
 
-        </div>
+                {/* Filtres Mobile */}
+                <div className="space-y-2">
+                  <DateFilterButton
+                    filterState={dateFilters}
+                    onClick={() => {
+                      setIsDateDrawerOpen(true);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    loading={dateLoading}
+                    className="w-full justify-start"
+                  />
+                  
+                  {role === 'admin' && (
+                    <PharmacyFilterButton
+                      onClick={() => {
+                        setIsPharmacyDrawerOpen(true);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="w-full justify-start"
+                    />
+                  )}
+                  
+                  <ProductFilterButton
+                    onClick={() => {
+                      setIsProductDrawerOpen(true);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="w-full justify-start"
+                  />
+                </div>
+
+                {/* Actions Mobile */}
+                <div className="pt-3 border-t border-gray-100 flex space-x-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSettingsClick}
+                    className="flex-1 justify-start space-x-2"
+                  >
+                    <Settings className="w-4 h-4" />
+                    <span>Paramètres</span>
+                  </Button>
+                  
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleLogoutClick}
+                    className="flex-1 justify-start space-x-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Déconnexion</span>
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.header>
 
-      {/* Date Filter Drawer */}
+      {/* Drawers */}
       <DateFilterDrawer
         isOpen={isDateDrawerOpen}
         onClose={() => setIsDateDrawerOpen(false)}
       />
-
-      {/* Pharmacy Filter Drawer - Seulement pour admins */}
+      
       {role === 'admin' && (
         <PharmacyFilterDrawer
           isOpen={isPharmacyDrawerOpen}
           onClose={() => setIsPharmacyDrawerOpen(false)}
         />
       )}
-
-      {/* Product Filter Drawer */}
+      
       <ProductFilterDrawer
         isOpen={isProductDrawerOpen}
         onClose={() => setIsProductDrawerOpen(false)}

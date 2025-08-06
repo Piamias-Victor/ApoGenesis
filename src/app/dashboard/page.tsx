@@ -11,10 +11,11 @@ import { ActiveFiltersBar } from '@/components/molecules/ActiveFiltersBar/Active
 import { DateFilterDrawer } from '@/components/molecules/DateFilterDrawer/DateFilterDrawer';
 import { PharmacyFilterDrawer } from '@/components/molecules/PharmacyFilterDrawer/PharmacyFilterDrawer';
 import { ProductFilterDrawer } from '@/components/molecules/ProductFilterDrawer/ProductFilterDrawer';
-
 import { redirect } from 'next/navigation';
 import ChartSection from '@/components/organisms/ChartSection/ChartSection';
+import DistributionChartsSection from '@/components/organisms/DistributionChartsSection/DistributionChartsSection';
 import KPISection from '@/components/organisms/KPISection/KPISection';
+import ObjectivesProgressSection from '@/components/organisms/ObjectivesProgressSection/ObjectivesProgressSection';
 import Top100Section from '@/components/organisms/Top100Section/Top100Section';
 
 /**
@@ -106,22 +107,25 @@ export default function DashboardPage(): JSX.Element {
             </div>
           </motion.div>
 
-          {/* Active Filters Bar */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1, ease: 'easeOut' }}
-            className="mb-6 sm:mb-8"
-          >
-            <ActiveFiltersBar
-              onDateFilterClick={() => setIsDateDrawerOpen(true)}
-              onPharmacyFilterClick={() => setIsPharmacyDrawerOpen(true)}
-              onProductFilterClick={() => setIsProductDrawerOpen(true)}
-            />
-          </motion.div>
+          {/* Active Filters Bar - Sticky */}
+          <div className="sticky top-14 sm:top-16 z-40 bg-gray-50 pb-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1, ease: 'easeOut' }}
+            >
+              <ActiveFiltersBar
+                onDateFilterClick={() => setIsDateDrawerOpen(true)}
+                onPharmacyFilterClick={() => setIsPharmacyDrawerOpen(true)}
+                onProductFilterClick={() => setIsProductDrawerOpen(true)}
+              />
+            </motion.div>
+          </div>
 
           {/* KPIs Section - 6 KPIs */}
-          <KPISection />
+          <div className="mb-6 sm:mb-8">
+            <KPISection />
+          </div>
 
           {/* Chart Section - Evolution CA */}
           <ChartSection />
@@ -129,35 +133,11 @@ export default function DashboardPage(): JSX.Element {
           {/* Top 100 Section - Produits/Labs/Catégories */}
           <Top100Section />
 
-          {/* Coming Soon Section */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.4, ease: 'easeOut' }}
-            className="mt-8"
-          >
-            <Card variant="gradient" padding="xl">
-              <div className="text-center space-y-4">
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
-                  🚀 Dashboard en construction
-                </h2>
-                <p className="text-sm sm:text-base text-gray-600 max-w-2xl mx-auto leading-relaxed">
-                  Les filtres sont opérationnels ! Graphiques et fonctionnalités avancées arrivent bientôt.
-                </p>
-                <div className="flex flex-wrap items-center justify-center gap-2 sm:space-x-2">
-                  <Badge variant="gradient-blue" size="md">
-                    Filtres ✓
-                  </Badge>
-                  <Badge variant="gradient-green" size="md">
-                    Graphiques
-                  </Badge>
-                  <Badge variant="gradient-purple" size="md">
-                    Exports
-                  </Badge>
-                </div>
-              </div>
-            </Card>
-          </motion.div>
+          {/* Objectives Progress Section */}
+          <ObjectivesProgressSection />
+
+          {/* Distribution Charts Section - TVA & Remboursement */}
+          <DistributionChartsSection />          
 
         </div>
       </div>

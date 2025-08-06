@@ -1,10 +1,11 @@
-// src/components/molecules/ProductFilterDrawer/ProductFilterDrawer.tsx
+// src/components/molecules/ProductFilterDrawer/ProductFilterDrawer.tsx (UPDATED)
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/atoms/Button/Button';
 import { ProductSearchInput } from '@/components/molecules/ProductSearchInput/ProductSearchInput';
+import { LaboratorySearchInput } from '@/components/molecules/LaboratorySearchInput/LaboratorySearchInput';
 import { useProductFiltersStore } from '@/store/productFiltersStore';
 import { 
   X, 
@@ -60,11 +61,17 @@ export const ProductFilterDrawer: React.FC<ProductFilterDrawerProps> = ({
   
   const {
     selectedProductIds,
+    selectedLaboratoryNames,
     searchResults,
+    laboratorySearchResults,
     resetFilters,
     selectAllProducts,
     deselectAllProducts,
+    selectAllLaboratories,
+    deselectAllLaboratories,
     getSelectedProducts,
+    getSelectedLaboratories,
+    getAPIFormat,
   } = useProductFiltersStore();
 
   useEffect(() => {
@@ -81,17 +88,32 @@ export const ProductFilterDrawer: React.FC<ProductFilterDrawerProps> = ({
 
   const handleApply = (): void => {
     const selectedProducts = getSelectedProducts();
-    console.log('Filtres produits appliqués:', {
+    const selectedLaboratories = getSelectedLaboratories();
+    const apiFormat = getAPIFormat();
+    
+    console.log('Filtres appliqués:', {
       activeTab,
-      selectedCount: selectedProductIds.length,
-      selectedIds: selectedProductIds,
-      selectedProducts
+      products: {
+        count: selectedProductIds.length,
+        ids: selectedProductIds,
+        items: selectedProducts
+      },
+      laboratories: {
+        count: selectedLaboratoryNames.length,
+        names: selectedLaboratoryNames,
+        items: selectedLaboratories
+      },
+      apiFormat
     });
     onClose();
   };
 
   const handleReset = (): void => {
     resetFilters();
+  };
+
+  const getTotalSelections = (): number => {
+    return selectedProductIds.length + selectedLaboratoryNames.length;
   };
 
   const renderTabContent = (): React.ReactNode => {
@@ -142,15 +164,44 @@ export const ProductFilterDrawer: React.FC<ProductFilterDrawerProps> = ({
       
       case 'laboratories':
         return (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center text-gray-500">
-              <Building className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Recherche Laboratoires
-              </h3>
-              <p className="text-sm text-gray-500">
-                Contenu à venir...
-              </p>
+          <div className="flex-1 flex flex-col p-6">
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Recherche de laboratoires
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Tapez au moins 2 caractères. Recherche par nom de laboratoire avec nombre de produits et univers.
+                </p>
+              </div>
+              
+              <LaboratorySearchInput />
+              
+              {laboratorySearchResults.length > 0 && (
+                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                  <div className="text-sm text-gray-600">
+                    {laboratorySearchResults.length} résultat(s) • {selectedLaboratoryNames.length} sélectionné(s)
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={selectAllLaboratories}
+                      disabled={laboratorySearchResults.length === 0}
+                    >
+                      Tout sélectionner
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={deselectAllLaboratories}
+                      disabled={selectedLaboratoryNames.length === 0}
+                    >
+                      Tout désélectionner
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );
@@ -317,9 +368,14 @@ export const ProductFilterDrawer: React.FC<ProductFilterDrawerProps> = ({
                 
                 <div className="flex items-center space-x-3">
                   <div className="text-sm text-gray-600">
-                    {selectedProductIds.length > 0 && (
+                    {getTotalSelections() > 0 && (
                       <span className="font-medium text-blue-600">
-                        {selectedProductIds.length} produit(s) sélectionné(s)
+                        {getTotalSelections()} sélection(s) 
+                        {selectedProductIds.length > 0 && selectedLaboratoryNames.length > 0 && (
+                          <span className="text-gray-500 ml-1">
+                            ({selectedProductIds.length} produits, {selectedLaboratoryNames.length} labos)
+                          </span>
+                        )}
                       </span>
                     )}
                   </div>
@@ -335,7 +391,7 @@ export const ProductFilterDrawer: React.FC<ProductFilterDrawerProps> = ({
                     size="md"
                     onClick={handleApply}
                   >
-                    Appliquer{selectedProductIds.length > 0 && ` (${selectedProductIds.length})`}
+                    Appliquer{getTotalSelections() > 0 && ` (${getTotalSelections()})`}
                   </Button>
                 </div>
               </div>

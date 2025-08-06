@@ -1,4 +1,4 @@
-// src/components/organisms/DashboardHeader/DashboardHeader.tsx
+// src/components/organisms/DashboardHeader/DashboardHeader.tsx (UPDATED)
 'use client';
 
 import React, { useState } from 'react';
@@ -15,7 +15,6 @@ import { PharmacyFilterButton } from '@/components/molecules/PharmacyFilterButto
 import { PharmacyFilterDrawer } from '@/components/molecules/PharmacyFilterDrawer/PharmacyFilterDrawer';
 import { ProductFilterButton } from '@/components/molecules/ProductFilterButton/ProductFilterButton';
 import { ProductFilterDrawer } from '@/components/molecules/ProductFilterDrawer/ProductFilterDrawer';
-import { useSelectedProductIds } from '@/store/productFiltersStore';
 import { Settings, LogOut } from 'lucide-react';
 
 interface DashboardHeaderProps {
@@ -28,12 +27,12 @@ interface DashboardHeaderProps {
  * Design épuré avec logo ApoData à gauche, filtres au centre et user actions à droite
  * Utilise le store global pour la gestion des dates
  * Bouton pharmacies visible uniquement pour les admins
+ * Bouton produits maintenant compte produits + laboratoires
  */
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className = '' }) => {
   const router = useRouter();
   const { user, isLoading, role, pharmacyName } = useAuth();
   const { dateFilters, isLoading: dateLoading } = useDateFilters();
-  const selectedProductIds = useSelectedProductIds();
 
   const [isDateDrawerOpen, setIsDateDrawerOpen] = useState(false);
   const [isPharmacyDrawerOpen, setIsPharmacyDrawerOpen] = useState(false);
@@ -127,10 +126,9 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className = ''
                 />
               )}
 
-              {/* Filtre Produits */}
+              {/* Filtre Produits + Laboratoires */}
               <ProductFilterButton
                 onClick={() => setIsProductDrawerOpen(true)}
-                selectedCount={selectedProductIds.length}
               />
 
             </div>
@@ -214,7 +212,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className = ''
         />
       )}
 
-      {/* Product Filter Drawer */}
+      {/* Product Filter Drawer - Maintenant avec laboratoires */}
       <ProductFilterDrawer
         isOpen={isProductDrawerOpen}
         onClose={() => setIsProductDrawerOpen(false)}

@@ -27,9 +27,9 @@ interface UseKPIsReturn {
 }
 
 export function useKPIs(
-  year: number = 2025, 
-  pharmacyId?: string,
-  brandLab?: string
+  year: number = 2025,
+  pharmacyIds?: string,  // Accepte plusieurs IDs séparés par des virgules
+  brandLabs?: string     // Accepte plusieurs labs séparés par des virgules
 ): UseKPIsReturn {
   const [data, setData] = useState<KPIsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,23 +39,21 @@ export function useKPIs(
     try {
       setLoading(true);
       setError(null);
-      
-      // Construction de l'URL avec les paramètres
+
       const params = new URLSearchParams({
         year: year.toString(),
-        ...(pharmacyId && { pharmacyId }),
-        ...(brandLab && { brandLab })
+        ...(pharmacyIds && { pharmacyIds }), // Reste au pluriel
+        ...(brandLabs && { brandLabs })     // Reste au pluriel
       });
-      
-      // CORRECTION: /api/dashboard/kpis avec un 's'
+
       const response = await fetch(`/api/dashboard/kpis?${params}`);
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const result = await response.json();
-      
+
       if (result.success) {
         setData(result.data);
       } else {
@@ -76,7 +74,7 @@ export function useKPIs(
 
   useEffect(() => {
     fetchKPIs();
-  }, [year, pharmacyId, brandLab]);
+  }, [year, pharmacyIds, brandLabs]);
 
   return {
     data,

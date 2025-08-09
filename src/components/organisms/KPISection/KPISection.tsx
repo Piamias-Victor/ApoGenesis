@@ -1,13 +1,33 @@
 // src/components/organisms/KPISection.tsx
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Card } from '@/components/atoms/Card/Card';
 import { useKPIs } from '@/hooks/dashboard/useKPIs';
+import { useSelectedProductIds, useSelectedLaboratoryNames } from '@/store/productFiltersStore';
+import { usePharmacyFiltersStore } from '@/store/pharmacyFiltersStore';
 
 export default function KPISection() {
-  const { data: kpis, loading, error } = useKPIs(2025);
+  // Récupération des filtres actifs depuis les stores
+  const selectedProductIds = useSelectedProductIds();
+  const selectedLaboratoryNames = useSelectedLaboratoryNames();
+  const selectedPharmacyIds = usePharmacyFiltersStore(state => state.selectedPharmacyIds);
+  
+  // Construction des paramètres pour l'API avec support multiple
+  const pharmacyFilter = selectedPharmacyIds.length > 0 ? selectedPharmacyIds.join(',') : undefined;
+  const brandLabFilter = selectedLaboratoryNames.length > 0 ? selectedLaboratoryNames.join(',') : undefined;
+  
+  const { data: kpis, loading, error, refetch } = useKPIs(
+    2025, 
+    pharmacyFilter,   // Sera envoyé comme pharmacyIds
+    brandLabFilter    // Sera envoyé comme brandLabs
+  );
+
+  // Refetch automatique quand les filtres changent
+  useEffect(() => {
+    refetch();
+  }, [selectedProductIds.length, selectedLaboratoryNames.length, selectedPharmacyIds.length]);
 
   // Loading state
   if (loading) {

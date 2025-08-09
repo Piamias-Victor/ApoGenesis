@@ -1,5 +1,6 @@
 // src/hooks/dashboard/useKPIs.ts
 import { useState, useEffect } from 'react';
+import { useDateFilters } from './useDateFilters';
 
 interface KPIData {
   value: string;
@@ -34,17 +35,38 @@ export function useKPIs(
   const [data, setData] = useState<KPIsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Récupération des filtres de date depuis le store
+  const { getAPIFormat, dateFilters } = useDateFilters();
+  const apiDateFilters = getAPIFormat();
 
   const fetchKPIs = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const params = new URLSearchParams({
-        year: year.toString(),
-        ...(pharmacyIds && { pharmacyIds }), // Reste au pluriel
-        ...(brandLabs && { brandLabs })     // Reste au pluriel
-      });
+      // Construire les paramètres de requête
+      const params = new URLSearchParams();
+      
+      // Ajouter les filtres de date s'ils existent
+      if (dateFilters.analysisPeriod.type !== 'custom' || 
+          (dateFilters.analysisPeriod.type === 'custom' && apiDateFilters)) {
+        params.append('analysisPeriodStart', apiDateFilters.analysisPeriod.start);
+        params.append('analysisPeriodEnd', apiDateFilters.analysisPeriod.end);
+        params.append('comparisonPeriodStart', apiDateFilters.comparisonPeriod.start);
+        params.append('comparisonPeriodEnd', apiDateFilters.comparisonPeriod.end);
+      } else {
+        // Fallback sur l'année si pas de filtres de date
+        params.append('year', year.toString());
+      }
+      
+      // Ajouter les autres filtres
+      if (pharmacyIds) {
+        params.append('pharmacyIds', pharmacyIds);
+      }
+      if (brandLabs) {
+        params.append('brandLabs', brandLabs);
+      }
 
       const response = await fetch(`/api/dashboard/kpis?${params}`);
 
@@ -72,9 +94,20 @@ export function useKPIs(
     }
   };
 
+  // Effect pour re-fetcher quand les paramètres changent
   useEffect(() => {
     fetchKPIs();
-  }, [year, pharmacyIds, brandLabs]);
+  }, [
+    // Re-fetch quand les dates changent
+    apiDateFilters.analysisPeriod.start,
+    apiDateFilters.analysisPeriod.end,
+    apiDateFilters.comparisonPeriod.start,
+    apiDateFilters.comparisonPeriod.end,
+    // Ou quand les autres filtres changent
+    year,
+    pharmacyIds,
+    brandLabs
+  ]);
 
   return {
     data,

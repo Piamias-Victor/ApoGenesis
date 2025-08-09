@@ -4,35 +4,87 @@ import pool from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  const year = parseInt(searchParams.get('year') || '2025');
+  
+  // Récupération des paramètres de date
+  const analysisPeriodStart = searchParams.get('analysisPeriodStart');
+  const analysisPeriodEnd = searchParams.get('analysisPeriodEnd');
+  const comparisonPeriodStart = searchParams.get('comparisonPeriodStart');
+  const comparisonPeriodEnd = searchParams.get('comparisonPeriodEnd');
+  
+  // Fallback sur année si pas de dates fournies
+  const year = parseInt(searchParams.get('year') || new Date().getFullYear().toString());
   const previousYear = year - 1;
   
-  // Support des deux formats pour la rétrocompatibilité
+  // Support des filtres existants
   const pharmacyIds = searchParams.get('pharmacyIds') || searchParams.get('pharmacyId');
   const brandLabs = searchParams.get('brandLabs') || searchParams.get('brandLab');
   
   try {
-    console.log('Fetching KPIs from MVs...', { year, previousYear, pharmacyIds, brandLabs });
+    // Déterminer si on utilise les dates ou les années
+    const useDateFilters = analysisPeriodStart && analysisPeriodEnd;
     
-    // Construction des conditions WHERE sous forme de strings
-    let whereConditions = 'WHERE year = $1';
-    let whereConditionsPrevious = 'WHERE year = $2';
-    const params: any[] = [year, previousYear];
+    // Extraction des mois et années depuis les dates
+    let currentStartDate: Date, currentEndDate: Date, previousStartDate: Date, previousEndDate: Date;
     
-    // Gestion des filtres
+    if (useDateFilters) {
+      currentStartDate = new Date(analysisPeriodStart);
+      currentEndDate = new Date(analysisPeriodEnd);
+      previousStartDate = new Date(comparisonPeriodStart!);
+      previousEndDate = new Date(comparisonPeriodEnd!);
+    } else {
+      currentStartDate = new Date(year, 0, 1);
+      currentEndDate = new Date(year, 11, 31);
+      previousStartDate = new Date(previousYear, 0, 1);
+      previousEndDate = new Date(previousYear, 11, 31);
+    }
+    
+    console.log('Fetching KPIs with filters:', { 
+      currentPeriod: { start: currentStartDate, end: currentEndDate },
+      previousPeriod: { start: previousStartDate, end: previousEndDate },
+      pharmacyIds, 
+      brandLabs 
+    });
+    
+    // Construire les conditions WHERE pour les MV monthly
+    let whereConditionsCurrent = '';
+    let whereConditionsPrevious = '';
+    const params: any[] = [];
+    
+    if (useDateFilters) {
+      // Pour les filtres par date, on filtre par année et mois
+      const currentStartYear = currentStartDate.getFullYear();
+      const currentStartMonth = currentStartDate.getMonth() + 1;
+      const currentEndYear = currentEndDate.getFullYear();
+      const currentEndMonth = currentEndDate.getMonth() + 1;
+      
+      const previousStartYear = previousStartDate.getFullYear();
+      const previousStartMonth = previousStartDate.getMonth() + 1;
+      const previousEndYear = previousEndDate.getFullYear();
+      const previousEndMonth = previousEndDate.getMonth() + 1;
+      
+      whereConditionsCurrent = `WHERE ((year = ${currentStartYear} AND month >= ${currentStartMonth}) OR year > ${currentStartYear}) 
+                                AND ((year = ${currentEndYear} AND month <= ${currentEndMonth}) OR year < ${currentEndYear})`;
+      whereConditionsPrevious = `WHERE ((year = ${previousStartYear} AND month >= ${previousStartMonth}) OR year > ${previousStartYear}) 
+                                 AND ((year = ${previousEndYear} AND month <= ${previousEndMonth}) OR year < ${previousEndYear})`;
+    } else {
+      // Mode année classique
+      whereConditionsCurrent = 'WHERE year = $1';
+      whereConditionsPrevious = 'WHERE year = $2';
+      params.push(year, previousYear);
+    }
+    
+    // Ajouter les filtres pharmacies et labos
     if (pharmacyIds) {
       const pharmacyIdArray = pharmacyIds.split(',');
-      // On ajoute la condition directement avec les valeurs
       const pharmacyList = pharmacyIdArray.map(id => `'${id}'`).join(',');
-      whereConditions += ` AND pharmacy_id::text IN (${pharmacyList})`;
+      whereConditionsCurrent += ` AND pharmacy_id::text IN (${pharmacyList})`;
       whereConditionsPrevious += ` AND pharmacy_id::text IN (${pharmacyList})`;
     }
     
     if (brandLabs) {
       const brandLabArray = brandLabs.split(',');
-      // On ajoute la condition directement avec les valeurs
       const brandList = brandLabArray.map(lab => `'${lab.replace(/'/g, "''")}'`).join(',');
-      whereConditions += ` AND brand_lab IN (${brandList})`;
+      whereConditionsCurrent += ` AND brand_lab IN (${brandList})`;
       whereConditionsPrevious += ` AND brand_lab IN (${brandList})`;
     }
     
@@ -43,7 +95,7 @@ export async function GET(request: NextRequest) {
             'ca_sellin' AS kpi_name,
             (SELECT COALESCE(SUM(ca_ht), 0) 
              FROM mv_ca_sellin_monthly 
-             ${whereConditions}) AS valeur_actuelle,
+             ${whereConditionsCurrent}) AS valeur_actuelle,
             (SELECT COALESCE(SUM(ca_ht), 0) 
              FROM mv_ca_sellin_monthly 
              ${whereConditionsPrevious}) AS valeur_precedente
@@ -55,7 +107,7 @@ export async function GET(request: NextRequest) {
             'ca_sellout' AS kpi_name,
             (SELECT COALESCE(SUM(ca_ttc), 0) 
              FROM mv_ca_sellout_monthly 
-             ${whereConditions}) AS valeur_actuelle,
+             ${whereConditionsCurrent}) AS valeur_actuelle,
             (SELECT COALESCE(SUM(ca_ttc), 0) 
              FROM mv_ca_sellout_monthly 
              ${whereConditionsPrevious}) AS valeur_precedente
@@ -67,10 +119,10 @@ export async function GET(request: NextRequest) {
             'marge_brute' AS kpi_name,
             (SELECT COALESCE(SUM(ca_ttc), 0) 
              FROM mv_ca_sellout_monthly 
-             ${whereConditions}) -
+             ${whereConditionsCurrent}) -
             (SELECT COALESCE(SUM(ca_ht), 0) 
              FROM mv_ca_sellin_monthly 
-             ${whereConditions}) AS valeur_actuelle,
+             ${whereConditionsCurrent}) AS valeur_actuelle,
             (SELECT COALESCE(SUM(ca_ttc), 0) 
              FROM mv_ca_sellout_monthly 
              ${whereConditionsPrevious}) -
@@ -80,17 +132,29 @@ export async function GET(request: NextRequest) {
         
         UNION ALL
         
-        -- Stock Valorisé (dernier mois disponible)
+        -- Stock Valorisé (dernier mois de la période)
         SELECT 
             'stock_valorise' AS kpi_name,
             (SELECT COALESCE(SUM(montant_valorise_achat), 0) 
              FROM mv_stock_monthly 
-             ${whereConditions}
-             AND month = (SELECT MAX(month) FROM mv_stock_monthly WHERE year = $1)) AS valeur_actuelle,
+             ${whereConditionsCurrent}
+             AND (year, month) = (
+               SELECT year, month 
+               FROM mv_stock_monthly 
+               ${whereConditionsCurrent}
+               ORDER BY year DESC, month DESC 
+               LIMIT 1
+             )) AS valeur_actuelle,
             (SELECT COALESCE(SUM(montant_valorise_achat), 0) 
              FROM mv_stock_monthly 
              ${whereConditionsPrevious}
-             AND month = (SELECT COALESCE(MAX(month), 12) FROM mv_stock_monthly WHERE year = $2)) AS valeur_precedente
+             AND (year, month) = (
+               SELECT year, month 
+               FROM mv_stock_monthly 
+               ${whereConditionsPrevious}
+               ORDER BY year DESC, month DESC 
+               LIMIT 1
+             )) AS valeur_precedente
         
         UNION ALL
         
@@ -101,17 +165,17 @@ export async function GET(request: NextRequest) {
                 WHEN (SELECT AVG(stock_mensuel) FROM (
                     SELECT SUM(montant_valorise_achat) AS stock_mensuel
                     FROM mv_stock_monthly 
-                    ${whereConditions}
-                    GROUP BY month
+                    ${whereConditionsCurrent}
+                    GROUP BY year, month
                 ) s) > 0
                 THEN (SELECT SUM(ca_ttc) 
                       FROM mv_ca_sellout_monthly 
-                      ${whereConditions}) / 
+                      ${whereConditionsCurrent}) / 
                      (SELECT AVG(stock_mensuel) FROM (
                         SELECT SUM(montant_valorise_achat) AS stock_mensuel
                         FROM mv_stock_monthly 
-                        ${whereConditions}
-                        GROUP BY month
+                        ${whereConditionsCurrent}
+                        GROUP BY year, month
                      ) s)
                 ELSE 0
             END AS valeur_actuelle,
@@ -120,7 +184,7 @@ export async function GET(request: NextRequest) {
                     SELECT SUM(montant_valorise_achat) AS stock_mensuel
                     FROM mv_stock_monthly 
                     ${whereConditionsPrevious}
-                    GROUP BY month
+                    GROUP BY year, month
                 ) s) > 0
                 THEN (SELECT SUM(ca_ttc) 
                       FROM mv_ca_sellout_monthly 
@@ -129,7 +193,7 @@ export async function GET(request: NextRequest) {
                         SELECT SUM(montant_valorise_achat) AS stock_mensuel
                         FROM mv_stock_monthly 
                         ${whereConditionsPrevious}
-                        GROUP BY month
+                        GROUP BY year, month
                      ) s)
                 ELSE 0
             END AS valeur_precedente
@@ -140,29 +204,47 @@ export async function GET(request: NextRequest) {
         SELECT 
             'couverture_stock' AS kpi_name,
             CASE 
-                WHEN (SELECT SUM(ca_ttc) / 365.0 
+                WHEN (SELECT SUM(ca_ttc) 
                       FROM mv_ca_sellout_monthly 
-                      ${whereConditions}) > 0
+                      ${whereConditionsCurrent}) > 0
                 THEN (SELECT SUM(montant_valorise_achat) 
                       FROM mv_stock_monthly 
-                      ${whereConditions}
-                      AND month = (SELECT MAX(month) FROM mv_stock_monthly WHERE year = $1)) / 
-                     (SELECT SUM(ca_ttc) / 365.0 
-                      FROM mv_ca_sellout_monthly 
-                      ${whereConditions})
+                      ${whereConditionsCurrent}
+                      AND (year, month) = (
+                        SELECT year, month 
+                        FROM mv_stock_monthly 
+                        ${whereConditionsCurrent}
+                        ORDER BY year DESC, month DESC 
+                        LIMIT 1
+                      )) / 
+                     ((SELECT SUM(ca_ttc) 
+                       FROM mv_ca_sellout_monthly 
+                       ${whereConditionsCurrent}) / 
+                      (SELECT COUNT(DISTINCT (year, month)) 
+                       FROM mv_ca_sellout_monthly 
+                       ${whereConditionsCurrent}) * 30)
                 ELSE 0
             END AS valeur_actuelle,
             CASE 
-                WHEN (SELECT SUM(ca_ttc) / 365.0 
+                WHEN (SELECT SUM(ca_ttc) 
                       FROM mv_ca_sellout_monthly 
                       ${whereConditionsPrevious}) > 0
                 THEN (SELECT SUM(montant_valorise_achat) 
                       FROM mv_stock_monthly 
                       ${whereConditionsPrevious}
-                      AND month = (SELECT COALESCE(MAX(month), 12) FROM mv_stock_monthly WHERE year = $2)) / 
-                     (SELECT SUM(ca_ttc) / 365.0 
-                      FROM mv_ca_sellout_monthly 
-                      ${whereConditionsPrevious})
+                      AND (year, month) = (
+                        SELECT year, month 
+                        FROM mv_stock_monthly 
+                        ${whereConditionsPrevious}
+                        ORDER BY year DESC, month DESC 
+                        LIMIT 1
+                      )) / 
+                     ((SELECT SUM(ca_ttc) 
+                       FROM mv_ca_sellout_monthly 
+                       ${whereConditionsPrevious}) / 
+                      (SELECT COUNT(DISTINCT (year, month)) 
+                       FROM mv_ca_sellout_monthly 
+                       ${whereConditionsPrevious}) * 30)
                 ELSE 0
             END AS valeur_precedente
       )
@@ -183,7 +265,7 @@ export async function GET(request: NextRequest) {
           END
     `;
 
-    // Exécution de la requête avec seulement les années comme paramètres
+    // Exécution de la requête
     const result = await pool.query(query, params);
     
     // Transformer les résultats en objet structuré
@@ -223,7 +305,7 @@ export async function GET(request: NextRequest) {
         evolution: formatEvolution(kpis.ca_sellin.evolution),
         evolutionPct: kpis.ca_sellin.evolution,
         trend: kpis.ca_sellin.trend,
-        label: 'vs année précédente'
+        label: useDateFilters ? 'vs période précédente' : 'vs année précédente'
       },
       ca_sellout: {
         value: formatCurrency(kpis.ca_sellout.value),
@@ -231,7 +313,7 @@ export async function GET(request: NextRequest) {
         evolution: formatEvolution(kpis.ca_sellout.evolution),
         evolutionPct: kpis.ca_sellout.evolution,
         trend: kpis.ca_sellout.trend,
-        label: 'vs année précédente'
+        label: useDateFilters ? 'vs période précédente' : 'vs année précédente'
       },
       marge_brute: {
         value: formatCurrency(kpis.marge_brute.value),
@@ -262,21 +344,39 @@ export async function GET(request: NextRequest) {
         rawValue: parseFloat(kpis.couverture_stock.value || 0),
         evolution: `${kpis.couverture_stock.evolution > 0 ? '+' : ''}${Math.round(parseFloat(kpis.couverture_stock.value || 0) - parseFloat(kpis.couverture_stock.previousValue || 0))}j`,
         evolutionPct: kpis.couverture_stock.evolution,
-        trend: parseFloat(kpis.couverture_stock.value || 0) < parseFloat(kpis.couverture_stock.previousValue || 1) ? 'positive' : 'negative', // Inversé car moins = mieux
+        trend: parseFloat(kpis.couverture_stock.value || 0) < parseFloat(kpis.couverture_stock.previousValue || 1) ? 'positive' : 'negative',
         label: 'optimal'
       }
     };
 
-    return NextResponse.json({
+    // Construction de la réponse
+    const response: any = {
       success: true,
-      year: year,
-      previousYear: previousYear,
       filters: {
         pharmacyIds: pharmacyIds || 'all',
         brandLabs: brandLabs || 'all'
       },
       data: formattedData
-    });
+    };
+
+    // Ajouter les informations de période
+    if (useDateFilters) {
+      response.periods = {
+        analysis: { 
+          start: currentStartDate.toISOString().split('T')[0], 
+          end: currentEndDate.toISOString().split('T')[0] 
+        },
+        comparison: { 
+          start: previousStartDate.toISOString().split('T')[0], 
+          end: previousEndDate.toISOString().split('T')[0] 
+        }
+      };
+    } else {
+      response.year = year;
+      response.previousYear = previousYear;
+    }
+
+    return NextResponse.json(response);
 
   } catch (error) {
     console.error('Erreur lors de la récupération des KPIs:', error);

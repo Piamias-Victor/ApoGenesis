@@ -1,413 +1,312 @@
 // src/app/api/dashboard/kpis/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { z } from 'zod';
+
+// Schéma de validation strict
+const KPIRequestSchema = z.object({
+  year: z.number().min(2020).max(2030).optional().default(2025),
+  pharmacyIds: z.string()
+    .transform(val => val ? val.split(',').map(id => id.trim()).filter(Boolean) : [])
+    .pipe(z.array(z.string().uuid()).max(100))
+    .optional(),
+  brandLabs: z.string()
+    .transform(val => val ? val.split(',').map(lab => lab.trim()).filter(Boolean) : [])
+    .pipe(z.array(z.string().max(100)).max(50))
+    .optional(),
+  analysisPeriodStart: z.string().nullish(),
+  analysisPeriodEnd: z.string().nullish(),
+  comparisonPeriodStart: z.string().nullish(),
+  comparisonPeriodEnd: z.string().nullish()
+});
 
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  
-  // Récupération des paramètres de date
-  const analysisPeriodStart = searchParams.get('analysisPeriodStart');
-  const analysisPeriodEnd = searchParams.get('analysisPeriodEnd');
-  const comparisonPeriodStart = searchParams.get('comparisonPeriodStart');
-  const comparisonPeriodEnd = searchParams.get('comparisonPeriodEnd');
-  
-  // Fallback sur année si pas de dates fournies
-  const year = parseInt(searchParams.get('year') || new Date().getFullYear().toString());
-  const previousYear = year - 1;
-  
-  // Support des filtres existants
-  const pharmacyIds = searchParams.get('pharmacyIds') || searchParams.get('pharmacyId');
-  const brandLabs = searchParams.get('brandLabs') || searchParams.get('brandLab');
+  const startTime = performance.now();
   
   try {
-    // Déterminer si on utilise les dates ou les années
-    const useDateFilters = analysisPeriodStart && analysisPeriodEnd;
+    // Extraction et validation des paramètres
+    const searchParams = request.nextUrl.searchParams;
+    const rawParams = {
+      year: parseInt(searchParams.get('year') || '2025'),
+      pharmacyIds: searchParams.get('pharmacyIds') || searchParams.get('pharmacyId') || '',
+      brandLabs: searchParams.get('brandLabs') || searchParams.get('brandLab') || '',
+      analysisPeriodStart: searchParams.get('analysisPeriodStart'),
+      analysisPeriodEnd: searchParams.get('analysisPeriodEnd'),
+      comparisonPeriodStart: searchParams.get('comparisonPeriodStart'),
+      comparisonPeriodEnd: searchParams.get('comparisonPeriodEnd')
+    };
     
-    // Extraction des mois et années depuis les dates
+    // Validation avec Zod
+    const validated = KPIRequestSchema.parse(rawParams);
+    
+    // Détermination des périodes
+    const useDateFilters = validated.analysisPeriodStart && validated.analysisPeriodEnd;
     let currentStartDate: Date, currentEndDate: Date, previousStartDate: Date, previousEndDate: Date;
     
-    if (useDateFilters) {
-      currentStartDate = new Date(analysisPeriodStart);
-      currentEndDate = new Date(analysisPeriodEnd);
-      previousStartDate = new Date(comparisonPeriodStart!);
-      previousEndDate = new Date(comparisonPeriodEnd!);
-    } else {
-      currentStartDate = new Date(year, 0, 1);
-      currentEndDate = new Date(year, 11, 31);
-      previousStartDate = new Date(previousYear, 0, 1);
-      previousEndDate = new Date(previousYear, 11, 31);
-    }
-    
-    console.log('Fetching KPIs with filters:', { 
-      currentPeriod: { start: currentStartDate, end: currentEndDate },
-      previousPeriod: { start: previousStartDate, end: previousEndDate },
-      pharmacyIds, 
-      brandLabs 
-    });
-    
-    // Construire les conditions WHERE pour les MV monthly
-    let whereConditionsCurrent = '';
-    let whereConditionsPrevious = '';
-    const params: any[] = [];
-    
-    if (useDateFilters) {
-      // Pour les filtres par date, on filtre par année et mois
-      const currentStartYear = currentStartDate.getFullYear();
-      const currentStartMonth = currentStartDate.getMonth() + 1;
-      const currentEndYear = currentEndDate.getFullYear();
-      const currentEndMonth = currentEndDate.getMonth() + 1;
+    if (useDateFilters && validated.analysisPeriodStart && validated.analysisPeriodEnd) {
+      // Vérification supplémentaire pour TypeScript
+      currentStartDate = new Date(validated.analysisPeriodStart);
+      currentEndDate = new Date(validated.analysisPeriodEnd);
       
-      const previousStartYear = previousStartDate.getFullYear();
-      const previousStartMonth = previousStartDate.getMonth() + 1;
-      const previousEndYear = previousEndDate.getFullYear();
-      const previousEndMonth = previousEndDate.getMonth() + 1;
-      
-      whereConditionsCurrent = `WHERE ((year = ${currentStartYear} AND month >= ${currentStartMonth}) OR year > ${currentStartYear}) 
-                                AND ((year = ${currentEndYear} AND month <= ${currentEndMonth}) OR year < ${currentEndYear})`;
-      whereConditionsPrevious = `WHERE ((year = ${previousStartYear} AND month >= ${previousStartMonth}) OR year > ${previousStartYear}) 
-                                 AND ((year = ${previousEndYear} AND month <= ${previousEndMonth}) OR year < ${previousEndYear})`;
-    } else {
-      // Mode année classique
-      whereConditionsCurrent = 'WHERE year = $1';
-      whereConditionsPrevious = 'WHERE year = $2';
-      params.push(year, previousYear);
-    }
-    
-    // Ajouter les filtres pharmacies et labos
-    if (pharmacyIds) {
-      const pharmacyIdArray = pharmacyIds.split(',');
-      const pharmacyList = pharmacyIdArray.map(id => `'${id}'`).join(',');
-      whereConditionsCurrent += ` AND pharmacy_id::text IN (${pharmacyList})`;
-      whereConditionsPrevious += ` AND pharmacy_id::text IN (${pharmacyList})`;
-    }
-    
-    if (brandLabs) {
-      const brandLabArray = brandLabs.split(',');
-      const brandList = brandLabArray.map(lab => `'${lab.replace(/'/g, "''")}'`).join(',');
-      whereConditionsCurrent += ` AND brand_lab IN (${brandList})`;
-      whereConditionsPrevious += ` AND brand_lab IN (${brandList})`;
-    }
-    
-    const query = `
-      WITH kpi_data AS (
-        -- CA Sell-In
-        SELECT 
-            'ca_sellin' AS kpi_name,
-            (SELECT COALESCE(SUM(ca_ht), 0) 
-             FROM mv_ca_sellin_monthly 
-             ${whereConditionsCurrent}) AS valeur_actuelle,
-            (SELECT COALESCE(SUM(ca_ht), 0) 
-             FROM mv_ca_sellin_monthly 
-             ${whereConditionsPrevious}) AS valeur_precedente
-        
-        UNION ALL
-        
-        -- CA Sell-Out
-        SELECT 
-            'ca_sellout' AS kpi_name,
-            (SELECT COALESCE(SUM(ca_ttc), 0) 
-             FROM mv_ca_sellout_monthly 
-             ${whereConditionsCurrent}) AS valeur_actuelle,
-            (SELECT COALESCE(SUM(ca_ttc), 0) 
-             FROM mv_ca_sellout_monthly 
-             ${whereConditionsPrevious}) AS valeur_precedente
-        
-        UNION ALL
-        
-        -- Marge Brute
-        SELECT 
-            'marge_brute' AS kpi_name,
-            (SELECT COALESCE(SUM(ca_ttc), 0) 
-             FROM mv_ca_sellout_monthly 
-             ${whereConditionsCurrent}) -
-            (SELECT COALESCE(SUM(ca_ht), 0) 
-             FROM mv_ca_sellin_monthly 
-             ${whereConditionsCurrent}) AS valeur_actuelle,
-            (SELECT COALESCE(SUM(ca_ttc), 0) 
-             FROM mv_ca_sellout_monthly 
-             ${whereConditionsPrevious}) -
-            (SELECT COALESCE(SUM(ca_ht), 0) 
-             FROM mv_ca_sellin_monthly 
-             ${whereConditionsPrevious}) AS valeur_precedente
-        
-        UNION ALL
-        
-        -- Stock Valorisé (dernier mois de la période)
-        SELECT 
-            'stock_valorise' AS kpi_name,
-            (SELECT COALESCE(SUM(montant_valorise_achat), 0) 
-             FROM mv_stock_monthly 
-             ${whereConditionsCurrent}
-             AND (year, month) = (
-               SELECT year, month 
-               FROM mv_stock_monthly 
-               ${whereConditionsCurrent}
-               ORDER BY year DESC, month DESC 
-               LIMIT 1
-             )) AS valeur_actuelle,
-            (SELECT COALESCE(SUM(montant_valorise_achat), 0) 
-             FROM mv_stock_monthly 
-             ${whereConditionsPrevious}
-             AND (year, month) = (
-               SELECT year, month 
-               FROM mv_stock_monthly 
-               ${whereConditionsPrevious}
-               ORDER BY year DESC, month DESC 
-               LIMIT 1
-             )) AS valeur_precedente
-        
-        UNION ALL
-        
-        -- Rotation des stocks
-        SELECT 
-            'rotation_stock' AS kpi_name,
-            CASE 
-                WHEN (SELECT AVG(stock_mensuel) FROM (
-                    SELECT SUM(montant_valorise_achat) AS stock_mensuel
-                    FROM mv_stock_monthly 
-                    ${whereConditionsCurrent}
-                    GROUP BY year, month
-                ) s) > 0
-                THEN (SELECT SUM(ca_ttc) 
-                      FROM mv_ca_sellout_monthly 
-                      ${whereConditionsCurrent}) / 
-                     (SELECT AVG(stock_mensuel) FROM (
-                        SELECT SUM(montant_valorise_achat) AS stock_mensuel
-                        FROM mv_stock_monthly 
-                        ${whereConditionsCurrent}
-                        GROUP BY year, month
-                     ) s)
-                ELSE 0
-            END AS valeur_actuelle,
-            CASE 
-                WHEN (SELECT AVG(stock_mensuel) FROM (
-                    SELECT SUM(montant_valorise_achat) AS stock_mensuel
-                    FROM mv_stock_monthly 
-                    ${whereConditionsPrevious}
-                    GROUP BY year, month
-                ) s) > 0
-                THEN (SELECT SUM(ca_ttc) 
-                      FROM mv_ca_sellout_monthly 
-                      ${whereConditionsPrevious}) / 
-                     (SELECT AVG(stock_mensuel) FROM (
-                        SELECT SUM(montant_valorise_achat) AS stock_mensuel
-                        FROM mv_stock_monthly 
-                        ${whereConditionsPrevious}
-                        GROUP BY year, month
-                     ) s)
-                ELSE 0
-            END AS valeur_precedente
-        
-        UNION ALL
-        
-        -- Couverture de stock (en jours)
-        SELECT 
-            'couverture_stock' AS kpi_name,
-            CASE 
-                WHEN (SELECT SUM(ca_ttc) 
-                      FROM mv_ca_sellout_monthly 
-                      ${whereConditionsCurrent}) > 0
-                THEN (SELECT SUM(montant_valorise_achat) 
-                      FROM mv_stock_monthly 
-                      ${whereConditionsCurrent}
-                      AND (year, month) = (
-                        SELECT year, month 
-                        FROM mv_stock_monthly 
-                        ${whereConditionsCurrent}
-                        ORDER BY year DESC, month DESC 
-                        LIMIT 1
-                      )) / 
-                     ((SELECT SUM(ca_ttc) 
-                       FROM mv_ca_sellout_monthly 
-                       ${whereConditionsCurrent}) / 
-                      (SELECT COUNT(DISTINCT (year, month)) 
-                       FROM mv_ca_sellout_monthly 
-                       ${whereConditionsCurrent}) * 30)
-                ELSE 0
-            END AS valeur_actuelle,
-            CASE 
-                WHEN (SELECT SUM(ca_ttc) 
-                      FROM mv_ca_sellout_monthly 
-                      ${whereConditionsPrevious}) > 0
-                THEN (SELECT SUM(montant_valorise_achat) 
-                      FROM mv_stock_monthly 
-                      ${whereConditionsPrevious}
-                      AND (year, month) = (
-                        SELECT year, month 
-                        FROM mv_stock_monthly 
-                        ${whereConditionsPrevious}
-                        ORDER BY year DESC, month DESC 
-                        LIMIT 1
-                      )) / 
-                     ((SELECT SUM(ca_ttc) 
-                       FROM mv_ca_sellout_monthly 
-                       ${whereConditionsPrevious}) / 
-                      (SELECT COUNT(DISTINCT (year, month)) 
-                       FROM mv_ca_sellout_monthly 
-                       ${whereConditionsPrevious}) * 30)
-                ELSE 0
-            END AS valeur_precedente
-      )
-      SELECT 
-          kpi_name,
-          valeur_actuelle,
-          valeur_precedente,
-          ROUND(((valeur_actuelle - valeur_precedente) / NULLIF(valeur_precedente, 0)) * 100, 1) AS evolution_pct
-      FROM kpi_data
-      ORDER BY 
-          CASE kpi_name
-              WHEN 'ca_sellin' THEN 1
-              WHEN 'ca_sellout' THEN 2
-              WHEN 'marge_brute' THEN 3
-              WHEN 'stock_valorise' THEN 4
-              WHEN 'rotation_stock' THEN 5
-              WHEN 'couverture_stock' THEN 6
-          END
-    `;
-
-    // Exécution de la requête
-    const result = await pool.query(query, params);
-    
-    // Transformer les résultats en objet structuré
-    const kpis = result.rows.reduce((acc: any, row: any) => {
-      const evolution = parseFloat(row.evolution_pct) || 0;
-      const currentValue = parseFloat(row.valeur_actuelle) || 0;
-      const previousValue = parseFloat(row.valeur_precedente) || 0;
-      
-      acc[row.kpi_name] = {
-        value: currentValue,
-        previousValue: previousValue,
-        evolution: evolution,
-        trend: evolution > 0 ? 'positive' : evolution < 0 ? 'negative' : 'neutral'
-      };
-      
-      return acc;
-    }, {});
-
-    // Vérifier que tous les KPIs sont présents
-    const requiredKpis = ['ca_sellin', 'ca_sellout', 'marge_brute', 'stock_valorise', 'rotation_stock', 'couverture_stock'];
-    for (const kpi of requiredKpis) {
-      if (!kpis[kpi]) {
-        kpis[kpi] = {
-          value: 0,
-          previousValue: 0,
-          evolution: 0,
-          trend: 'neutral'
-        };
+      if (!validated.comparisonPeriodStart || !validated.comparisonPeriodEnd) {
+        // Calcul automatique de la période de comparaison si non fournie
+        const daysDiff = (currentEndDate.getTime() - currentStartDate.getTime()) / (1000 * 60 * 60 * 24);
+        previousStartDate = new Date(currentStartDate);
+        previousStartDate.setDate(previousStartDate.getDate() - Math.round(daysDiff) - 1);
+        previousEndDate = new Date(currentEndDate);
+        previousEndDate.setDate(previousEndDate.getDate() - Math.round(daysDiff) - 1);
+      } else {
+        previousStartDate = new Date(validated.comparisonPeriodStart);
+        previousEndDate = new Date(validated.comparisonPeriodEnd);
       }
+    } else {
+      // Mode année
+      currentStartDate = new Date(validated.year, 0, 1);
+      currentEndDate = new Date(validated.year, 11, 31);
+      previousStartDate = new Date(validated.year - 1, 0, 1);
+      previousEndDate = new Date(validated.year - 1, 11, 31);
     }
-
-    // Formatage spécifique pour chaque KPI
-    const formattedData = {
+    
+    // Construction requête simplifiée et directe
+    const query = `
+      SELECT 
+        -- Période actuelle
+        (SELECT COALESCE(SUM(ca_ht), 0) 
+         FROM mv_ca_sellin_monthly
+         WHERE year BETWEEN $3 AND $5
+           AND month >= CASE WHEN year = $3 THEN $4 ELSE 1 END
+           AND month <= CASE WHEN year = $5 THEN $6 ELSE 12 END
+           AND ($1::uuid[] IS NULL OR pharmacy_id = ANY($1))
+           AND ($2::text[] IS NULL OR brand_lab = ANY($2))) as current_sellin,
+           
+        (SELECT COALESCE(SUM(ca_ttc), 0) 
+         FROM mv_ca_sellout_monthly
+         WHERE year BETWEEN $3 AND $5
+           AND month >= CASE WHEN year = $3 THEN $4 ELSE 1 END
+           AND month <= CASE WHEN year = $5 THEN $6 ELSE 12 END
+           AND ($1::uuid[] IS NULL OR pharmacy_id = ANY($1))
+           AND ($2::text[] IS NULL OR brand_lab = ANY($2))) as current_sellout,
+           
+        (SELECT COALESCE(SUM(montant_valorise_achat), 0) 
+         FROM mv_stock_monthly
+         WHERE year BETWEEN $3 AND $5
+           AND month >= CASE WHEN year = $3 THEN $4 ELSE 1 END
+           AND month <= CASE WHEN year = $5 THEN $6 ELSE 12 END
+           AND ($1::uuid[] IS NULL OR pharmacy_id = ANY($1))
+           AND ($2::text[] IS NULL OR brand_lab = ANY($2))) as current_stock,
+           
+        -- Période précédente
+        (SELECT COALESCE(SUM(ca_ht), 0) 
+         FROM mv_ca_sellin_monthly
+         WHERE year BETWEEN $7 AND $9
+           AND month >= CASE WHEN year = $7 THEN $8 ELSE 1 END
+           AND month <= CASE WHEN year = $9 THEN $10 ELSE 12 END
+           AND ($1::uuid[] IS NULL OR pharmacy_id = ANY($1))
+           AND ($2::text[] IS NULL OR brand_lab = ANY($2))) as prev_sellin,
+           
+        (SELECT COALESCE(SUM(ca_ttc), 0) 
+         FROM mv_ca_sellout_monthly
+         WHERE year BETWEEN $7 AND $9
+           AND month >= CASE WHEN year = $7 THEN $8 ELSE 1 END
+           AND month <= CASE WHEN year = $9 THEN $10 ELSE 12 END
+           AND ($1::uuid[] IS NULL OR pharmacy_id = ANY($1))
+           AND ($2::text[] IS NULL OR brand_lab = ANY($2))) as prev_sellout,
+           
+        (SELECT COALESCE(SUM(montant_valorise_achat), 0) 
+         FROM mv_stock_monthly
+         WHERE year BETWEEN $7 AND $9
+           AND month >= CASE WHEN year = $7 THEN $8 ELSE 1 END
+           AND month <= CASE WHEN year = $9 THEN $10 ELSE 12 END
+           AND ($1::uuid[] IS NULL OR pharmacy_id = ANY($1))
+           AND ($2::text[] IS NULL OR brand_lab = ANY($2))) as prev_stock,
+           
+        -- Comptage des mois (simplifié)
+        1 as current_months,
+        1 as prev_months
+    `;
+    
+    // Paramètres pour la requête
+    const params = [
+      validated.pharmacyIds?.length ? validated.pharmacyIds : null,  // $1
+      validated.brandLabs?.length ? validated.brandLabs : null,     // $2
+      currentStartDate.getFullYear(),    // $3
+      currentStartDate.getMonth() + 1,   // $4
+      currentEndDate.getFullYear(),      // $5
+      currentEndDate.getMonth() + 1,     // $6
+      previousStartDate.getFullYear(),   // $7
+      previousStartDate.getMonth() + 1,  // $8
+      previousEndDate.getFullYear(),     // $9
+      previousEndDate.getMonth() + 1     // $10
+    ];
+    
+    // Exécution avec timeout
+    const queryPromise = pool.query(query, params);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Query timeout')), 5000)
+    );
+    
+    const result = await Promise.race([queryPromise, timeoutPromise]) as any;
+    const row = result.rows[0];
+    
+    // Calcul des KPIs
+    const kpis = {
       ca_sellin: {
-        value: formatCurrency(kpis.ca_sellin.value),
-        rawValue: kpis.ca_sellin.value,
-        evolution: formatEvolution(kpis.ca_sellin.evolution),
-        evolutionPct: kpis.ca_sellin.evolution,
-        trend: kpis.ca_sellin.trend,
+        value: formatCurrency(row.current_sellin),
+        rawValue: parseFloat(row.current_sellin),
+        evolution: calculateEvolution(row.current_sellin, row.prev_sellin),
+        evolutionPct: calculateEvolutionPct(row.current_sellin, row.prev_sellin),
+        trend: getTrend(row.current_sellin, row.prev_sellin),
         label: useDateFilters ? 'vs période précédente' : 'vs année précédente'
       },
       ca_sellout: {
-        value: formatCurrency(kpis.ca_sellout.value),
-        rawValue: kpis.ca_sellout.value,
-        evolution: formatEvolution(kpis.ca_sellout.evolution),
-        evolutionPct: kpis.ca_sellout.evolution,
-        trend: kpis.ca_sellout.trend,
+        value: formatCurrency(row.current_sellout),
+        rawValue: parseFloat(row.current_sellout),
+        evolution: calculateEvolution(row.current_sellout, row.prev_sellout),
+        evolutionPct: calculateEvolutionPct(row.current_sellout, row.prev_sellout),
+        trend: getTrend(row.current_sellout, row.prev_sellout),
         label: useDateFilters ? 'vs période précédente' : 'vs année précédente'
       },
       marge_brute: {
-        value: formatCurrency(kpis.marge_brute.value),
-        rawValue: kpis.marge_brute.value,
-        evolution: formatEvolution(kpis.marge_brute.evolution),
-        evolutionPct: kpis.marge_brute.evolution,
-        trend: kpis.marge_brute.trend,
+        value: formatCurrency(row.current_sellout - row.current_sellin),
+        rawValue: row.current_sellout - row.current_sellin,
+        evolution: calculateEvolution(
+          row.current_sellout - row.current_sellin,
+          row.prev_sellout - row.prev_sellin
+        ),
+        evolutionPct: calculateEvolutionPct(
+          row.current_sellout - row.current_sellin,
+          row.prev_sellout - row.prev_sellin
+        ),
+        trend: getTrend(
+          row.current_sellout - row.current_sellin,
+          row.prev_sellout - row.prev_sellin
+        ),
         label: 'rentabilité'
       },
       stock_valorise: {
-        value: formatCurrency(kpis.stock_valorise.value),
-        rawValue: kpis.stock_valorise.value,
-        evolution: formatEvolution(kpis.stock_valorise.evolution),
-        evolutionPct: kpis.stock_valorise.evolution,
-        trend: kpis.stock_valorise.trend,
+        value: formatCurrency(row.current_stock),
+        rawValue: parseFloat(row.current_stock),
+        evolution: calculateEvolution(row.current_stock, row.prev_stock),
+        evolutionPct: calculateEvolutionPct(row.current_stock, row.prev_stock),
+        trend: getTrend(row.current_stock, row.prev_stock),
         label: 'optimal'
       },
       rotation_stock: {
-        value: `${parseFloat(kpis.rotation_stock.value || 0).toFixed(1)}x/an`,
-        rawValue: parseFloat(kpis.rotation_stock.value || 0),
-        evolution: `${kpis.rotation_stock.evolution > 0 ? '+' : ''}${(parseFloat(kpis.rotation_stock.value || 0) - parseFloat(kpis.rotation_stock.previousValue || 0)).toFixed(1)}x`,
-        evolutionPct: kpis.rotation_stock.evolution,
-        trend: kpis.rotation_stock.trend,
+        value: row.current_stock > 0 ? 
+          `${(row.current_sellout / row.current_stock).toFixed(1)}x/an` : '0x/an',
+        rawValue: row.current_stock > 0 ? row.current_sellout / row.current_stock : 0,
+        evolution: formatRotationEvolution(
+          row.current_stock > 0 ? row.current_sellout / row.current_stock : 0,
+          row.prev_stock > 0 ? row.prev_sellout / row.prev_stock : 0
+        ),
+        evolutionPct: calculateEvolutionPct(
+          row.current_stock > 0 ? row.current_sellout / row.current_stock : 0,
+          row.prev_stock > 0 ? row.prev_sellout / row.prev_stock : 0
+        ),
+        trend: getTrend(
+          row.current_stock > 0 ? row.current_sellout / row.current_stock : 0,
+          row.prev_stock > 0 ? row.prev_sellout / row.prev_stock : 0
+        ),
         label: 'performance'
       },
       couverture_stock: {
-        value: `${Math.round(parseFloat(kpis.couverture_stock.value || 0))} jours`,
-        rawValue: parseFloat(kpis.couverture_stock.value || 0),
-        evolution: `${kpis.couverture_stock.evolution > 0 ? '+' : ''}${Math.round(parseFloat(kpis.couverture_stock.value || 0) - parseFloat(kpis.couverture_stock.previousValue || 0))}j`,
-        evolutionPct: kpis.couverture_stock.evolution,
-        trend: parseFloat(kpis.couverture_stock.value || 0) < parseFloat(kpis.couverture_stock.previousValue || 1) ? 'positive' : 'negative',
+        value: calculateCouverture(row.current_stock, row.current_sellout, row.current_months),
+        rawValue: row.current_sellout > 0 ? 
+          (row.current_stock / (row.current_sellout / row.current_months)) * 30 : 0,
+        evolution: formatCouvertureEvolution(
+          row.current_stock, row.current_sellout, row.current_months,
+          row.prev_stock, row.prev_sellout, row.prev_months
+        ),
+        evolutionPct: 0,
+        trend: 'neutral',
         label: 'optimal'
       }
     };
-
-    // Construction de la réponse
-    const response: any = {
-      success: true,
-      filters: {
-        pharmacyIds: pharmacyIds || 'all',
-        brandLabs: brandLabs || 'all'
-      },
-      data: formattedData
-    };
-
-    // Ajouter les informations de période
-    if (useDateFilters) {
-      response.periods = {
-        analysis: { 
-          start: currentStartDate.toISOString().split('T')[0], 
-          end: currentEndDate.toISOString().split('T')[0] 
-        },
-        comparison: { 
-          start: previousStartDate.toISOString().split('T')[0], 
-          end: previousEndDate.toISOString().split('T')[0] 
-        }
-      };
-    } else {
-      response.year = year;
-      response.previousYear = previousYear;
+    
+    const executionTime = performance.now() - startTime;
+    
+    // Log performance si > 500ms
+    if (executionTime > 500) {
+      console.warn(`KPI calculation took ${executionTime.toFixed(0)}ms`, {
+        filters: { pharmacyIds: validated.pharmacyIds?.length, brandLabs: validated.brandLabs?.length }
+      });
     }
-
-    return NextResponse.json(response);
-
+    
+    return NextResponse.json({
+      success: true,
+      data: kpis,
+      executionTime: Math.round(executionTime),
+      filters: {
+        pharmacyIds: validated.pharmacyIds?.length || 0,
+        brandLabs: validated.brandLabs?.length || 0
+      }
+    });
+    
   } catch (error) {
-    console.error('Erreur lors de la récupération des KPIs:', error);
+    console.error('KPI Error:', error);
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Invalid parameters', 
+          details: error.issues.map(issue => ({
+            path: issue.path.join('.'),
+            message: issue.message
+          }))
+        },
+        { status: 400 }
+      );
+    }
+    
     return NextResponse.json(
-      { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Erreur lors de la récupération des KPIs'
-      },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     );
   }
 }
 
 // Fonctions utilitaires
-function formatCurrency(value: number | string): string {
-  const numValue = typeof value === 'string' ? parseFloat(value) : value;
-  if (isNaN(numValue)) return '0 €';
-  
-  if (numValue >= 1000000) {
-    return `${(numValue / 1000000).toFixed(1)}M €`;
-  } else if (numValue >= 1000) {
-    return `${(numValue / 1000).toFixed(0)}K €`;
-  }
-  return new Intl.NumberFormat('fr-FR', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  }).format(numValue) + ' €';
+function formatCurrency(value: number): string {
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M €`;
+  if (value >= 1000) return `${(value / 1000).toFixed(0)}K €`;
+  return `${Math.round(value)} €`;
 }
 
-function formatEvolution(value: number | string): string {
-  const numValue = typeof value === 'string' ? parseFloat(value) : value;
-  if (isNaN(numValue) || numValue === 0) return '0%';
-  return `${numValue > 0 ? '+' : ''}${numValue.toFixed(1)}%`;
+function calculateEvolution(current: number, previous: number): string {
+  if (!previous) return '0%';
+  const pct = ((current - previous) / previous) * 100;
+  return `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%`;
+}
+
+function calculateEvolutionPct(current: number, previous: number): number {
+  if (!previous) return 0;
+  return ((current - previous) / previous) * 100;
+}
+
+function getTrend(current: number, previous: number): 'positive' | 'negative' | 'neutral' {
+  if (current > previous) return 'positive';
+  if (current < previous) return 'negative';
+  return 'neutral';
+}
+
+function formatRotationEvolution(current: number, previous: number): string {
+  const diff = current - previous;
+  return `${diff > 0 ? '+' : ''}${diff.toFixed(1)}x`;
+}
+
+function calculateCouverture(stock: number, sellout: number, months: number): string {
+  if (!sellout || !months) return '0 jours';
+  const days = (stock / (sellout / months)) * 30;
+  return `${Math.round(days)} jours`;
+}
+
+function formatCouvertureEvolution(
+  currentStock: number, currentSellout: number, currentMonths: number,
+  prevStock: number, prevSellout: number, prevMonths: number
+): string {
+  const current = currentSellout > 0 ? (currentStock / (currentSellout / currentMonths)) * 30 : 0;
+  const previous = prevSellout > 0 ? (prevStock / (prevSellout / prevMonths)) * 30 : 0;
+  const diff = current - previous;
+  return `${diff > 0 ? '+' : ''}${Math.round(diff)}j`;
 }

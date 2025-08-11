@@ -21,6 +21,60 @@ interface DateFilterDrawerProps {
   readonly className?: string;
 }
 
+// Fonction helper pour formater une date en string pour input date
+const formatDateForInput = (date: Date | null | undefined): string => {
+  if (!date || isNaN(date.getTime())) {
+    // Retourner la date du jour par défaut
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  try {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  } catch {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+};
+
+// Fonction helper pour créer une date valide depuis une string
+const createValidDate = (dateString: string, fallback: Date): Date => {
+  if (!dateString || dateString.length < 10) return fallback;
+  
+  try {
+    // Parse manuel pour éviter les problèmes de timezone
+    const [year, month, day] = dateString.split('-').map(Number);
+    
+    // Vérifications de validité
+    if (!year || !month || !day) return fallback;
+    if (year < 1900 || year > 2100) return fallback;
+    if (month < 1 || month > 12) return fallback;
+    if (day < 1 || day > 31) return fallback;
+    
+    const date = new Date(year, month - 1, day);
+    
+    // Vérifier que la date créée correspond aux valeurs entrées
+    // (pour gérer les cas comme 31 février qui devient 3 mars)
+    if (date.getFullYear() !== year || 
+        date.getMonth() !== month - 1 || 
+        date.getDate() !== day) {
+      return fallback;
+    }
+    
+    return date;
+  } catch {
+    return fallback;
+  }
+};
+
 /**
  * DateFilterDrawer - Drawer responsive de sélection des périodes
  * 
@@ -41,12 +95,24 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
 
   const [localAnalysisPeriod, setLocalAnalysisPeriod] = useState<AnalysisPeriod>(dateFilters.analysisPeriod);
   const [localComparisonPeriod, setLocalComparisonPeriod] = useState<ComparisonPeriod>(dateFilters.comparisonPeriod);
+  
+  // États pour les inputs de date (valeurs string contrôlées)
+  const [analysisStartInput, setAnalysisStartInput] = useState<string>('');
+  const [analysisEndInput, setAnalysisEndInput] = useState<string>('');
+  const [comparisonStartInput, setComparisonStartInput] = useState<string>('');
+  const [comparisonEndInput, setComparisonEndInput] = useState<string>('');
 
   React.useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
       setLocalAnalysisPeriod(dateFilters.analysisPeriod);
       setLocalComparisonPeriod(dateFilters.comparisonPeriod);
+      
+      // Initialiser les inputs de date
+      setAnalysisStartInput(formatDateForInput(dateFilters.analysisPeriod.range.start));
+      setAnalysisEndInput(formatDateForInput(dateFilters.analysisPeriod.range.end));
+      setComparisonStartInput(formatDateForInput(dateFilters.comparisonPeriod.range.start));
+      setComparisonEndInput(formatDateForInput(dateFilters.comparisonPeriod.range.end));
     } else {
       document.body.style.overflow = 'unset';
     }
@@ -86,6 +152,10 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
     }
 
     setLocalAnalysisPeriod(newAnalysisPeriod);
+    
+    // Mettre à jour les inputs
+    setAnalysisStartInput(formatDateForInput(newAnalysisPeriod.range.start));
+    setAnalysisEndInput(formatDateForInput(newAnalysisPeriod.range.end));
 
     if (localComparisonPeriod.type === 'previous_period') {
       setLocalComparisonPeriod({
@@ -125,6 +195,10 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
     }
 
     setLocalComparisonPeriod(newComparisonPeriod);
+    
+    // Mettre à jour les inputs
+    setComparisonStartInput(formatDateForInput(newComparisonPeriod.range.start));
+    setComparisonEndInput(formatDateForInput(newComparisonPeriod.range.end));
   };
 
   const handleApply = (): void => {
@@ -257,17 +331,31 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
                       size="sm"
                       type="date"
                       label="Date début"
-                      value={localAnalysisPeriod.range.start.toISOString().split('T')[0]}
+                      value={analysisStartInput}
                       onChange={(e) => {
-                        const newStart = new Date(e.target.value);
-                        setLocalAnalysisPeriod({
-                          type: 'custom',
-                          range: {
-                            start: newStart,
-                            end: localAnalysisPeriod.range.end
-                          },
-                          label: 'Période personnalisée'
-                        });
+                        const value = e.target.value;
+                        setAnalysisStartInput(value);
+                        
+                        // Ne mettre à jour la période que si la date est complète et valide
+                        if (value && value.length === 10) {
+                          const newStart = createValidDate(value, localAnalysisPeriod.range.start);
+                          if (newStart <= localAnalysisPeriod.range.end) {
+                            setLocalAnalysisPeriod({
+                              type: 'custom',
+                              range: {
+                                start: newStart,
+                                end: localAnalysisPeriod.range.end
+                              },
+                              label: 'Période personnalisée'
+                            });
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        // Réinitialiser si invalide lors de la perte de focus
+                        if (!analysisStartInput || analysisStartInput.length !== 10) {
+                          setAnalysisStartInput(formatDateForInput(localAnalysisPeriod.range.start));
+                        }
                       }}
                     />
                     <Input
@@ -275,17 +363,31 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
                       size="sm"  
                       type="date"
                       label="Date fin"
-                      value={localAnalysisPeriod.range.end.toISOString().split('T')[0]}
+                      value={analysisEndInput}
                       onChange={(e) => {
-                        const newEnd = new Date(e.target.value);
-                        setLocalAnalysisPeriod({
-                          type: 'custom',
-                          range: {
-                            start: localAnalysisPeriod.range.start,
-                            end: newEnd
-                          },
-                          label: 'Période personnalisée'
-                        });
+                        const value = e.target.value;
+                        setAnalysisEndInput(value);
+                        
+                        // Ne mettre à jour la période que si la date est complète et valide
+                        if (value && value.length === 10) {
+                          const newEnd = createValidDate(value, localAnalysisPeriod.range.end);
+                          if (newEnd >= localAnalysisPeriod.range.start) {
+                            setLocalAnalysisPeriod({
+                              type: 'custom',
+                              range: {
+                                start: localAnalysisPeriod.range.start,
+                                end: newEnd
+                              },
+                              label: 'Période personnalisée'
+                            });
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        // Réinitialiser si invalide lors de la perte de focus
+                        if (!analysisEndInput || analysisEndInput.length !== 10) {
+                          setAnalysisEndInput(formatDateForInput(localAnalysisPeriod.range.end));
+                        }
                       }}
                     />
                   </div>
@@ -338,17 +440,31 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
                       size="sm"
                       type="date"
                       label="Date début"
-                      value={localComparisonPeriod.range.start.toISOString().split('T')[0]}
+                      value={comparisonStartInput}
                       onChange={(e) => {
-                        const newStart = new Date(e.target.value);
-                        setLocalComparisonPeriod({
-                          type: 'custom',
-                          range: {
-                            start: newStart,
-                            end: localComparisonPeriod.range.end
-                          },
-                          label: 'Comparaison personnalisée'
-                        });
+                        const value = e.target.value;
+                        setComparisonStartInput(value);
+                        
+                        // Ne mettre à jour la période que si la date est complète et valide
+                        if (value && value.length === 10) {
+                          const newStart = createValidDate(value, localComparisonPeriod.range.start);
+                          if (newStart <= localComparisonPeriod.range.end) {
+                            setLocalComparisonPeriod({
+                              type: 'custom',
+                              range: {
+                                start: newStart,
+                                end: localComparisonPeriod.range.end
+                              },
+                              label: 'Comparaison personnalisée'
+                            });
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        // Réinitialiser si invalide lors de la perte de focus
+                        if (!comparisonStartInput || comparisonStartInput.length !== 10) {
+                          setComparisonStartInput(formatDateForInput(localComparisonPeriod.range.start));
+                        }
                       }}
                     />
                     <Input
@@ -356,17 +472,31 @@ export const DateFilterDrawer: React.FC<DateFilterDrawerProps> = ({
                       size="sm"
                       type="date"
                       label="Date fin"
-                      value={localComparisonPeriod.range.end.toISOString().split('T')[0]}
+                      value={comparisonEndInput}
                       onChange={(e) => {
-                        const newEnd = new Date(e.target.value);
-                        setLocalComparisonPeriod({
-                          type: 'custom',
-                          range: {
-                            start: localComparisonPeriod.range.start,
-                            end: newEnd
-                          },
-                          label: 'Comparaison personnalisée'
-                        });
+                        const value = e.target.value;
+                        setComparisonEndInput(value);
+                        
+                        // Ne mettre à jour la période que si la date est complète et valide
+                        if (value && value.length === 10) {
+                          const newEnd = createValidDate(value, localComparisonPeriod.range.end);
+                          if (newEnd >= localComparisonPeriod.range.start) {
+                            setLocalComparisonPeriod({
+                              type: 'custom',
+                              range: {
+                                start: localComparisonPeriod.range.start,
+                                end: newEnd
+                              },
+                              label: 'Comparaison personnalisée'
+                            });
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        // Réinitialiser si invalide lors de la perte de focus
+                        if (!comparisonEndInput || comparisonEndInput.length !== 10) {
+                          setComparisonEndInput(formatDateForInput(localComparisonPeriod.range.end));
+                        }
                       }}
                     />
                   </div>

@@ -124,11 +124,11 @@ export default function DashboardPage(): JSX.Element {
 
           {/* KPIs Section - 6 KPIs */}
           <div className="mb-6 sm:mb-8">
-            <KPISection />
+            {/* <KPISection /> */}
           </div>
 
           {/* Chart Section - Evolution CA */}
-          <ChartSection />
+          {/* <ChartSection /> */}
 
           {/* Top 100 Section - Produits/Labs/Catégories */}
           <Top100Section />

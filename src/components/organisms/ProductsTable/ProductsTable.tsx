@@ -1,136 +1,194 @@
-// src/components/organisms/ProductsTable.tsx
+// src/components/organisms/ProductsTable/ProductsTable.tsx
 'use client';
 
 import React, { useMemo } from 'react';
+import { TopProductItem } from '@/hooks/dashboard/useTopProducts';
 
-interface Product {
-  id: string;
-  nom: string;
-  code: string;
-  ca_sellout: number;
-  quantite_vendue: number;
-  marge_pct: number;
-  stock_valorise: number;
-  laboratoire: string;
-  categorie: string;
-}
+export type SortField = 'ca_sellout' | 'quantity' | 'margin' | 'stock';
+export type SortDirection = 'asc' | 'desc';
 
 interface ProductsTableProps {
-  sortField: 'ca_sellout' | 'quantity' | 'margin' | 'stock';
-  sortDirection: 'asc' | 'desc';
+  data: TopProductItem[];
+  sortField: SortField;
+  sortDirection: SortDirection;
   searchTerm: string;
-  onSort: (field: 'ca_sellout' | 'quantity' | 'margin' | 'stock') => void;
+  onSort: (field: SortField) => void;
+  loading?: boolean;
 }
 
-const mockProducts: Product[] = [
-  { id: '1', nom: 'Doliprane 1000mg', code: 'DLP1000', ca_sellout: 45230, quantite_vendue: 1520, marge_pct: 22.5, stock_valorise: 8940, laboratoire: 'Sanofi', categorie: 'Antalgique' },
-  { id: '2', nom: 'Amoxicilline 500mg', code: 'AMX500', ca_sellout: 38720, quantite_vendue: 890, marge_pct: 28.3, stock_valorise: 12450, laboratoire: 'Biogaran', categorie: 'Antibiotique' },
-  { id: '3', nom: 'Efferalgan 500mg', code: 'EFF500', ca_sellout: 35890, quantite_vendue: 1340, marge_pct: 19.8, stock_valorise: 6780, laboratoire: 'UPSA', categorie: 'Antalgique' },
-  { id: '4', nom: 'Ventoline 100µg', code: 'VEN100', ca_sellout: 29450, quantite_vendue: 520, marge_pct: 31.2, stock_valorise: 9850, laboratoire: 'GSK', categorie: 'Respiratoire' },
-  { id: '5', nom: 'Smecta vanille', code: 'SME001', ca_sellout: 27340, quantite_vendue: 780, marge_pct: 25.7, stock_valorise: 4320, laboratoire: 'Ipsen', categorie: 'Digestif' }
-];
+const formatCurrency = (value: number): string => {
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M €`;
+  if (value >= 1000) return `${(value / 1000).toFixed(0)}K €`;
+  return `${value.toFixed(0)} €`;
+};
 
-export default function ProductsTable({ sortField, sortDirection, searchTerm, onSort }: ProductsTableProps) {
-  const sortedAndFilteredProducts = useMemo(() => {
-    let filtered = mockProducts.filter(product =>
-      product.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.laboratoire.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+const formatNumber = (value: number): string => {
+  if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
+  return value.toString();
+};
 
-    return filtered.sort((a, b) => {
-      let aVal: number, bVal: number;
+export default function ProductsTable({
+  data,
+  sortField,
+  sortDirection,
+  searchTerm,
+  onSort,
+  loading = false
+}: ProductsTableProps) {
+  // Filtrage et tri des données
+  const processedData = useMemo(() => {
+    let filtered = data;
+    
+    // Filtrage par recherche
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      filtered = data.filter(item => 
+        item.product_name?.toLowerCase().includes(search) ||
+        item.brand_lab?.toLowerCase().includes(search) ||
+        item.category?.toLowerCase().includes(search) ||
+        item.code_13_ref_id?.includes(search)
+      );
+    }
+    
+    // Tri
+    const sorted = [...filtered].sort((a, b) => {
+      let aValue: number;
+      let bValue: number;
       
       switch (sortField) {
-        case 'ca_sellout': aVal = a.ca_sellout; bVal = b.ca_sellout; break;
-        case 'quantity': aVal = a.quantite_vendue; bVal = b.quantite_vendue; break;
-        case 'margin': aVal = a.marge_pct; bVal = b.marge_pct; break;
-        case 'stock': aVal = a.stock_valorise; bVal = b.stock_valorise; break;
-        default: aVal = a.ca_sellout; bVal = b.ca_sellout;
+        case 'ca_sellout':
+          aValue = a.ca_sellout;
+          bValue = b.ca_sellout;
+          break;
+        case 'quantity':
+          aValue = a.quantity;
+          bValue = b.quantity;
+          break;
+        case 'margin':
+          aValue = a.margin;
+          bValue = b.margin;
+          break;
+        case 'stock':
+          aValue = a.stock;
+          bValue = b.stock;
+          break;
+        default:
+          return 0;
       }
-
-      return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+      
+      return sortDirection === 'desc' ? bValue - aValue : aValue - bValue;
     });
-  }, [sortField, sortDirection, searchTerm]);
-
-  const formatCurrency = (value: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(value);
-  const formatNumber = (value: number) => new Intl.NumberFormat('fr-FR').format(value);
-
-  const getSortIcon = (field: string) => {
-    if (sortField !== field) return '↕️';
-    return sortDirection === 'asc' ? '↑' : '↓';
-  };
-
+    
+    return sorted;
+  }, [data, searchTerm, sortField, sortDirection]);
+  
+  // Header avec tri
+  const SortableHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
+    <th 
+      className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+      onClick={() => onSort(field)}
+    >
+      <div className="flex items-center space-x-1">
+        <span>{children}</span>
+        {sortField === field && (
+          <span className="text-blue-600">
+            {sortDirection === 'desc' ? '↓' : '↑'}
+          </span>
+        )}
+      </div>
+    </th>
+  );
+  
+  if (loading) {
+    return (
+      <div className="animate-pulse">
+        <div className="h-10 bg-gray-200 rounded mb-4"></div>
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className="h-16 bg-gray-100 rounded mb-2"></div>
+        ))}
+      </div>
+    );
+  }
+  
+  if (processedData.length === 0) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        {searchTerm ? 'Aucun produit trouvé' : 'Aucune donnée disponible'}
+      </div>
+    );
+  }
+  
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full">
-        <thead>
-          <tr className="border-b border-gray-200">
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+      <table className="min-w-full divide-y divide-gray-200">
+        <thead className="bg-gray-50">
+          <tr>
+            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Rang
+            </th>
+            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Produit
             </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Code
-            </th>
-            <th 
-              className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700"
-              onClick={() => onSort('ca_sellout')}
-            >
-              CA Sell-Out {getSortIcon('ca_sellout')}
-            </th>
-            <th 
-              className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700"
-              onClick={() => onSort('quantity')}
-            >
-              Quantité {getSortIcon('quantity')}
-            </th>
-            <th 
-              className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700"
-              onClick={() => onSort('margin')}
-            >
-              % Marge {getSortIcon('margin')}
-            </th>
-            <th 
-              className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700"
-              onClick={() => onSort('stock')}
-            >
-              Stock {getSortIcon('stock')}
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Laboratoire
             </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Catégorie
             </th>
+            <SortableHeader field="quantity">Quantité</SortableHeader>
+            <SortableHeader field="ca_sellout">CA TTC</SortableHeader>
+            <SortableHeader field="margin">Marge</SortableHeader>
+            <SortableHeader field="stock">Stock</SortableHeader>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-200">
-          {sortedAndFilteredProducts.map((product, index) => (
-            <tr key={product.id} className="hover:bg-gray-50 transition-colors">
-              <td className="px-4 py-3">
-                <div className="flex items-center">
-                  <div className={`w-6 h-6 rounded-full text-xs flex items-center justify-center text-white font-medium mr-3 ${
-                    index < 3 ? 'bg-green-500' : index < 10 ? 'bg-blue-500' : 'bg-gray-400'
-                  }`}>
-                    {index + 1}
-                  </div>
-                  <div className="text-sm font-medium text-gray-900">{product.nom}</div>
+        <tbody className="bg-white divide-y divide-gray-200">
+          {processedData.map((item, index) => (
+            <tr key={`${item.code_13_ref_id}-${index}`} className="hover:bg-gray-50">
+              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                {item.rank}
+              </td>
+              <td className="px-3 py-4 text-sm text-gray-900">
+                <div>
+                  <div className="font-medium">{item.product_name}</div>
+                  <div className="text-xs text-gray-500">{item.code_13_ref_id}</div>
+                  {item.range_name && (
+                    <div className="text-xs text-gray-400">{item.range_name}</div>
+                  )}
                 </div>
               </td>
-              <td className="px-4 py-3 text-sm text-gray-600">{product.code}</td>
-              <td className="px-4 py-3 text-sm font-medium text-gray-900 text-right">{formatCurrency(product.ca_sellout)}</td>
-              <td className="px-4 py-3 text-sm text-gray-900 text-right">{formatNumber(product.quantite_vendue)}</td>
-              <td className="px-4 py-3 text-right">
-                <span className={`text-sm font-medium ${product.marge_pct > 25 ? 'text-green-600' : product.marge_pct > 20 ? 'text-orange-600' : 'text-red-600'}`}>
-                  {product.marge_pct.toFixed(1)}%
-                </span>
+              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-600">
+                {item.brand_lab}
               </td>
-              <td className="px-4 py-3 text-sm text-gray-900 text-right">{formatCurrency(product.stock_valorise)}</td>
-              <td className="px-4 py-3 text-sm text-gray-600">{product.laboratoire}</td>
-              <td className="px-4 py-3">
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  {product.categorie}
-                </span>
+              <td className="px-3 py-4 text-sm text-gray-600">
+                <div>
+                  <div>{item.category}</div>
+                  {item.sub_category && (
+                    <div className="text-xs text-gray-400">{item.sub_category}</div>
+                  )}
+                </div>
+              </td>
+              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                {formatNumber(item.quantity)}
+              </td>
+              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                {formatCurrency(item.ca_sellout)}
+              </td>
+              <td className="px-3 py-4 whitespace-nowrap text-sm">
+                <div>
+                  <div className="font-medium text-gray-900">
+                    {formatCurrency(item.margin)}
+                  </div>
+                  <div className={`text-xs ${
+                    item.margin_percentage > 30 ? 'text-green-600' :
+                    item.margin_percentage > 20 ? 'text-blue-600' :
+                    'text-gray-500'
+                  }`}>
+                    {item.margin_percentage}%
+                  </div>
+                </div>
+              </td>
+              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                {formatNumber(item.stock)}
               </td>
             </tr>
           ))}

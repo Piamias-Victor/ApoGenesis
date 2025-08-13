@@ -8,8 +8,10 @@ import { Badge } from '@/components/atoms/Badge/Badge';
 import { RefreshCw } from 'lucide-react';
 import ProductsTable from '../ProductsTable/ProductsTable';
 import { useTopProducts, ViewType } from '@/hooks/dashboard/useTopProducts';
+import { usePharmacyFilters } from '@/hooks/dashboard/usePharmacyFilters';
+import { useProductFilters } from '@/hooks/dashboard/useProductFilters';
 
-type SortField = 'ca_sellout' | 'quantity' | 'margin' | 'stock';
+type SortField = 'ca_sellout' | 'quantity' | 'margin';
 type SortDirection = 'asc' | 'desc';
 
 interface Top100SectionProps {
@@ -34,7 +36,11 @@ export default function Top100Section({ className = '' }: Top100SectionProps) {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Utilisation du hook
+  // Récupération des filtres pour l'affichage uniquement
+  const { selectedPharmacyIds } = usePharmacyFilters();
+  const { selectedLaboratoryNames } = useProductFilters();
+  
+  // Utilisation du hook simplifié (les filtres sont récupérés directement dans le hook)
   const { 
     data, 
     viewType,
@@ -78,6 +84,9 @@ export default function Top100Section({ className = '' }: Top100SectionProps) {
     }
   }, [executionTime]);
 
+  // Indicateur de filtres actifs
+  const hasActiveFilters = selectedPharmacyIds.length > 0 || selectedLaboratoryNames.length > 0;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
@@ -95,6 +104,11 @@ export default function Top100Section({ className = '' }: Top100SectionProps) {
               </h3>
               <p className="text-sm text-gray-600 mt-1">
                 Analyse détaillée par performance et rentabilité
+                {hasActiveFilters && (
+                  <span className="text-blue-600 ml-2">
+                    (Filtres actifs)
+                  </span>
+                )}
               </p>
             </div>
 
@@ -146,8 +160,19 @@ export default function Top100Section({ className = '' }: Top100SectionProps) {
             </div>
 
             <div className="flex items-center space-x-2">
+              {/* Indicateurs de filtres actifs */}
+              {selectedPharmacyIds.length > 0 && (
+                <Badge variant="gray" size="sm">
+                  {selectedPharmacyIds.length} pharmacie{selectedPharmacyIds.length > 1 ? 's' : ''}
+                </Badge>
+              )}
+              {selectedLaboratoryNames.length > 0 && (
+                <Badge variant="gray" size="sm">
+                  {selectedLaboratoryNames.length} labo{selectedLaboratoryNames.length > 1 ? 's' : ''}
+                </Badge>
+              )}
               <Badge variant="primary" size="sm">
-                Tri: {sortField === 'ca_sellout' ? 'CA' : sortField === 'quantity' ? 'Quantité' : sortField === 'margin' ? 'Marge' : 'Stock'}
+                Tri: {sortField === 'ca_sellout' ? 'CA' : sortField === 'quantity' ? 'Quantité' : 'Marge'}
               </Badge>
               <Badge variant="gray" size="sm">
                 {sortDirection === 'desc' ? '↓' : '↑'}

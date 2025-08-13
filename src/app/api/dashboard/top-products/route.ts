@@ -7,8 +7,16 @@ import { z } from 'zod';
 const TopProductsRequestSchema = z.object({
   viewType: z.enum(['products', 'laboratories', 'categories']).default('products'),
   limit: z.number().min(1).max(500).default(100),
+  
+  // Dates pour les plages
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  
+  // Année/mois pour compatibilité
   year: z.number().min(2020).max(2030).optional(),
   month: z.number().min(1).max(12).optional(),
+  
+  // Filtres
   pharmacyIds: z.string()
     .transform(val => val ? val.split(',').map(id => id.trim()).filter(Boolean) : [])
     .pipe(z.array(z.string().uuid()).max(100))
@@ -29,7 +37,9 @@ export async function GET(request: NextRequest) {
     const rawParams = {
       viewType: searchParams.get('viewType') || 'products',
       limit: parseInt(searchParams.get('limit') || '100'),
-      year: searchParams.get('year') ? parseInt(searchParams.get('year')!) : new Date().getFullYear(),
+      startDate: searchParams.get('startDate') || undefined,
+      endDate: searchParams.get('endDate') || undefined,
+      year: searchParams.get('year') ? parseInt(searchParams.get('year')!) : undefined,
       month: searchParams.get('month') ? parseInt(searchParams.get('month')!) : undefined,
       pharmacyIds: searchParams.get('pharmacyIds') || '',
       brandLabs: searchParams.get('brandLabs') || '',
@@ -41,51 +51,75 @@ export async function GET(request: NextRequest) {
     // Validation
     const validated = TopProductsRequestSchema.parse(rawParams);
     
+    // Déterminer le mode (plage de dates ou année/mois)
+    const useDateRange = !!(validated.startDate && validated.endDate);
+    
+    if (useDateRange) {
+      console.log('Mode: Date range from', validated.startDate, 'to', validated.endDate);
+    } else {
+      // Utiliser l'année et le mois actuels par défaut
+      if (!validated.year) {
+        validated.year = new Date().getFullYear();
+      }
+      if (!validated.month) {
+        validated.month = new Date().getMonth() + 1;
+      }
+      console.log('Mode: Single month', validated.year + '-' + validated.month);
+    }
+    
     console.log('Validated params:', validated);
     
     // Construction de la requête selon le type de vue
     let query = '';
-    let params: any[] = [];
+    let queryParams: any[] = [];
     
     switch (validated.viewType) {
       case 'products':
-        query = buildProductsQuery(validated);
-        params = buildProductsParams(validated);
+        const result = buildProductsQueryAndParams(validated, useDateRange);
+        query = result.query;
+        queryParams = result.params;
         break;
         
       case 'laboratories':
-        query = buildLaboratoriesQuery(validated);
-        params = buildLaboratoriesParams(validated);
-        break;
+        // À implémenter
+        return NextResponse.json(
+          { success: false, error: 'Laboratories view not implemented yet' },
+          { status: 501 }
+        );
         
       case 'categories':
-        query = buildCategoriesQuery(validated);
-        params = buildCategoriesParams(validated);
-        break;
+        // À implémenter
+        return NextResponse.json(
+          { success: false, error: 'Categories view not implemented yet' },
+          { status: 501 }
+        );
     }
     
-    console.log('Query params:', params);
-    console.log('Query:', query.substring(0, 200) + '...');
+    console.log('Query params:', queryParams);
+    console.log('Query preview:', query.substring(0, 300) + '...');
     
     // Exécution de la requête
-    const result = await pool.query(query, params);
+    const result = await pool.query(query, queryParams);
     
-    console.log('Query result rows:', result.rows.length);
+    console.log('Query returned', result.rows.length, 'rows');
     
     // Formatage des résultats
     const formattedData = result.rows.map((row, index) => ({
       rank: index + 1,
-      ...row,
+      internal_id: row.internal_id,
+      code_13_ref_id: row.code_13_ref_id,
+      product_name: row.product_name,
+      brand_lab: row.brand_lab,
+      category: row.category,
+      sub_category: row.sub_category,
+      range_name: row.range_name,
       quantity: parseInt(row.quantity || 0),
       ca_sellout: parseFloat(row.ca_ttc || 0),
       margin: parseFloat(row.marge || 0),
-      margin_percentage: parseFloat(row.margin_percentage || 0),
-      stock: parseInt(row.stock || 0)
+      margin_percentage: parseFloat(row.margin_percentage || 0)
     }));
     
     const executionTime = performance.now() - startTime;
-    
-    console.log('Returning', formattedData.length, 'items');
     
     return NextResponse.json({
       success: true,
@@ -94,8 +128,15 @@ export async function GET(request: NextRequest) {
       metadata: {
         viewType: validated.viewType,
         total: formattedData.length,
-        year: validated.year,
-        month: validated.month,
+        period: useDateRange ? {
+          type: 'range',
+          start: validated.startDate,
+          end: validated.endDate
+        } : {
+          type: 'month',
+          year: validated.year,
+          month: validated.month
+        },
         filters: {
           pharmacyIds: validated.pharmacyIds?.length || 0,
           brandLabs: validated.brandLabs?.length || 0
@@ -118,45 +159,77 @@ export async function GET(request: NextRequest) {
     }
     
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Internal server error' },
+      { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Internal server error' 
+      },
       { status: 500 }
     );
   }
 }
 
-// Requête pour les produits
-function buildProductsQuery(params: z.infer<typeof TopProductsRequestSchema>): string {
-  const rankColumn = params.sortBy === 'ca_ttc' ? 'rank_ca' : 
-                     params.sortBy === 'marge' ? 'rank_marge' : 'rank_quantity';
+// Fonction pour construire la requête et les paramètres pour les produits
+function buildProductsQueryAndParams(
+  params: z.infer<typeof TopProductsRequestSchema>, 
+  useDateRange: boolean
+): { query: string; params: any[] } {
   
-  // Construire les conditions WHERE dynamiquement
-  let whereConditions = [`${rankColumn} <= $1`];
-  let paramIndex = 2;
+  if (useDateRange) {
+    // ===== MODE PLAGE DE DATES =====
+    return buildDateRangeQuery(params);
+  } else {
+    // ===== MODE MOIS UNIQUE =====
+    return buildMonthQuery(params);
+  }
+}
+
+// Requête pour une plage de dates
+function buildDateRangeQuery(params: z.infer<typeof TopProductsRequestSchema>) {
+  const queryParams: any[] = [];
+  let paramCounter = 1;
   
-  if (params.year) {
-    whereConditions.push(`year = ${paramIndex}`);
-    paramIndex++;
+  // Paramètres de base
+  const startDateParam = `$${paramCounter++}`;  // $1
+  const endDateParam = `$${paramCounter++}`;    // $2
+  queryParams.push(params.startDate);
+  queryParams.push(params.endDate);
+  
+  // Construire les conditions WHERE
+  let whereConditions: string[] = [];
+  
+  if (params.pharmacyIds && params.pharmacyIds.length > 0) {
+    whereConditions.push(`mp.pharmacy_id = ANY($${paramCounter}::uuid[])`);
+    queryParams.push(params.pharmacyIds);
+    paramCounter++;
   }
   
-  if (params.month) {
-    whereConditions.push(`month = ${paramIndex}`);
-    paramIndex++;
+  if (params.brandLabs && params.brandLabs.length > 0) {
+    whereConditions.push(`mp.brand_lab = ANY($${paramCounter}::text[])`);
+    queryParams.push(params.brandLabs);
+    paramCounter++;
   }
   
-  if (params.pharmacyIds?.length) {
-    whereConditions.push(`pharmacy_id = ANY(${paramIndex}::uuid[])`);
-    paramIndex++;
-  }
+  const whereClause = whereConditions.length > 0 
+    ? 'AND ' + whereConditions.join(' AND ')
+    : '';
   
-  if (params.brandLabs?.length) {
-    whereConditions.push(`brand_lab = ANY(${paramIndex}::text[])`);
-    paramIndex++;
-  }
+  // Ajouter le limit à la fin
+  const limitParam = `$${paramCounter}`;
+  queryParams.push(params.limit);
   
-  const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-  
-  return `
-    WITH filtered_products AS (
+  // Construction de la requête SQL
+  const query = `
+    WITH date_range AS (
+      SELECT 
+        DATE_PART('year', d)::integer as year,
+        DATE_PART('month', d)::integer as month
+      FROM generate_series(
+        ${startDateParam}::date,
+        ${endDateParam}::date,
+        '1 month'::interval
+      ) d
+    ),
+    filtered_products AS (
       SELECT 
         mp.internal_id,
         mp.code_13_ref_id,
@@ -169,10 +242,11 @@ function buildProductsQuery(params: z.infer<typeof TopProductsRequestSchema>): s
         mp.ca_ttc,
         mp.ca_ht,
         mp.marge,
-        mp.avg_price_ttc,
-        -- Stock actuel depuis inventorysnapshot
-        0 as stock
+        mp.avg_price_ttc
       FROM mv_top_products_monthly mp
+      INNER JOIN date_range dr 
+        ON mp.year = dr.year 
+        AND mp.month = dr.month
       ${whereClause}
     ),
     aggregated AS (
@@ -186,8 +260,8 @@ function buildProductsQuery(params: z.infer<typeof TopProductsRequestSchema>): s
         COUNT(DISTINCT pharmacy_id) as nb_pharmacies,
         SUM(quantity) as quantity,
         SUM(ca_ttc) as ca_ttc,
+        SUM(ca_ht) as ca_ht,
         SUM(marge) as marge,
-        AVG(stock) as stock,
         CASE 
           WHEN SUM(ca_ttc) > 0 
           THEN ROUND((SUM(marge) / SUM(ca_ttc) * 100)::numeric, 1)
@@ -208,167 +282,127 @@ function buildProductsQuery(params: z.infer<typeof TopProductsRequestSchema>): s
       quantity::bigint as quantity,
       ca_ttc,
       marge,
-      margin_percentage,
-      COALESCE(stock::integer, 0) as stock
+      margin_percentage
     FROM aggregated
-    ORDER BY ${params.sortBy === 'ca_ttc' ? 'ca_ttc' : 
-             params.sortBy === 'marge' ? 'marge' : 'quantity'} DESC
+    ORDER BY ${
+      params.sortBy === 'ca_ttc' ? 'ca_ttc' : 
+      params.sortBy === 'marge' ? 'marge' : 
+      'quantity'
+    } DESC
+    LIMIT ${limitParam}
+  `;
+  
+  return { query, params: queryParams };
+}
+
+// Requête pour un mois unique
+function buildMonthQuery(params: z.infer<typeof TopProductsRequestSchema>) {
+  const queryParams: any[] = [];
+  let paramCounter = 1;
+  
+  // Déterminer la colonne de rang
+  const rankColumn = params.sortBy === 'ca_ttc' ? 'rank_ca' : 
+                     params.sortBy === 'marge' ? 'rank_marge' : 
+                     'rank_quantity';
+  
+  // Construire les conditions WHERE
+  let whereConditions: string[] = [];
+  
+  // Limite basée sur le rang
+  whereConditions.push(`${rankColumn} <= $${paramCounter}`);
+  queryParams.push(params.limit);
+  paramCounter++;
+  
+  // Année
+  if (params.year) {
+    whereConditions.push(`year = $${paramCounter}`);
+    queryParams.push(params.year);
+    paramCounter++;
+  }
+  
+  // Mois
+  if (params.month) {
+    whereConditions.push(`month = $${paramCounter}`);
+    queryParams.push(params.month);
+    paramCounter++;
+  }
+  
+  // Filtres optionnels
+  if (params.pharmacyIds && params.pharmacyIds.length > 0) {
+    whereConditions.push(`pharmacy_id = ANY($${paramCounter}::uuid[])`);
+    queryParams.push(params.pharmacyIds);
+    paramCounter++;
+  }
+  
+  if (params.brandLabs && params.brandLabs.length > 0) {
+    whereConditions.push(`brand_lab = ANY($${paramCounter}::text[])`);
+    queryParams.push(params.brandLabs);
+    paramCounter++;
+  }
+  
+  const whereClause = 'WHERE ' + whereConditions.join(' AND ');
+  
+  // Construction de la requête SQL
+  const query = `
+    WITH filtered_products AS (
+      SELECT 
+        mp.internal_id,
+        mp.code_13_ref_id,
+        mp.product_name,
+        mp.brand_lab,
+        mp.category,
+        mp.sub_category,
+        mp.pharmacy_id,
+        mp.quantity,
+        mp.ca_ttc,
+        mp.ca_ht,
+        mp.marge,
+        mp.avg_price_ttc
+      FROM mv_top_products_monthly mp
+      ${whereClause}
+    ),
+    aggregated AS (
+      SELECT 
+        internal_id,
+        code_13_ref_id,
+        MIN(product_name) as product_name,
+        MIN(brand_lab) as brand_lab,
+        MIN(category) as category,
+        MIN(sub_category) as sub_category,
+        COUNT(DISTINCT pharmacy_id) as nb_pharmacies,
+        SUM(quantity) as quantity,
+        SUM(ca_ttc) as ca_ttc,
+        SUM(ca_ht) as ca_ht,
+        SUM(marge) as marge,
+        CASE 
+          WHEN SUM(ca_ttc) > 0 
+          THEN ROUND((SUM(marge) / SUM(ca_ttc) * 100)::numeric, 1)
+          ELSE 0 
+        END as margin_percentage
+      FROM filtered_products
+      GROUP BY internal_id, code_13_ref_id
+    )
+    SELECT 
+      internal_id,
+      code_13_ref_id,
+      product_name,
+      brand_lab,
+      category,
+      sub_category,
+      NULL as range_name,
+      nb_pharmacies,
+      quantity::bigint as quantity,
+      ca_ttc,
+      marge,
+      margin_percentage
+    FROM aggregated
+    ORDER BY ${
+      params.sortBy === 'ca_ttc' ? 'ca_ttc' : 
+      params.sortBy === 'marge' ? 'marge' : 
+      'quantity'
+    } DESC
     LIMIT $1
   `;
-}
-
-// Requête pour les laboratoires
-function buildLaboratoriesQuery(params: z.infer<typeof TopProductsRequestSchema>): string {
-  let whereConditions = ['year = $1'];
-  let paramIndex = 2;
-  let limitParam = '$2';
   
-  if (params.month) {
-    whereConditions.push(`month = ${paramIndex}`);
-    paramIndex++;
-    limitParam = `${paramIndex}`;
-  }
-  
-  if (params.pharmacyIds?.length) {
-    whereConditions.push(`pharmacy_id = ANY(${paramIndex}::uuid[])`);
-    paramIndex++;
-    limitParam = `${paramIndex}`;
-  }
-  
-  whereConditions.push('brand_lab IS NOT NULL');
-  const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
-  
-  return `
-    WITH lab_aggregated AS (
-      SELECT 
-        brand_lab,
-        COUNT(DISTINCT internal_id) as nb_products,
-        COUNT(DISTINCT pharmacy_id) as nb_pharmacies,
-        SUM(quantity) as quantity,
-        SUM(ca_ttc) as ca_ttc,
-        SUM(marge) as marge
-      FROM mv_top_products_by_lab_monthly
-      ${whereClause}
-      GROUP BY brand_lab
-    )
-    SELECT 
-      brand_lab as product_name,
-      brand_lab,
-      nb_products::text as category,
-      nb_pharmacies::text as sub_category,
-      'Laboratoire' as code_13_ref_id,
-      NULL as range_name,
-      quantity::bigint as quantity,
-      ca_ttc,
-      marge,
-      CASE 
-        WHEN ca_ttc > 0 
-        THEN ROUND((marge / ca_ttc * 100)::numeric, 1)
-        ELSE 0 
-      END as margin_percentage,
-      0 as stock
-    FROM lab_aggregated
-    ORDER BY ${params.sortBy === 'ca_ttc' ? 'ca_ttc' : 
-             params.sortBy === 'marge' ? 'marge' : 'quantity'} DESC
-    LIMIT ${limitParam}
-  `;
-}
-
-// Requête pour les catégories
-function buildCategoriesQuery(params: z.infer<typeof TopProductsRequestSchema>): string {
-  let whereConditions = ['year = $1'];
-  let paramIndex = 2;
-  let limitParam = '$2';
-  
-  if (params.month) {
-    whereConditions.push(`month = ${paramIndex}`);
-    paramIndex++;
-    limitParam = `${paramIndex}`;
-  }
-  
-  if (params.pharmacyIds?.length) {
-    whereConditions.push(`pharmacy_id = ANY(${paramIndex}::uuid[])`);
-    paramIndex++;
-    limitParam = `${paramIndex}`;
-  }
-  
-  if (params.brandLabs?.length) {
-    whereConditions.push(`brand_lab = ANY(${paramIndex}::text[])`);
-    paramIndex++;
-    limitParam = `${paramIndex}`;
-  }
-  
-  whereConditions.push('category IS NOT NULL');
-  const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
-  
-  return `
-    WITH cat_aggregated AS (
-      SELECT 
-        category,
-        COUNT(DISTINCT internal_id) as nb_products,
-        COUNT(DISTINCT pharmacy_id) as nb_pharmacies,
-        COUNT(DISTINCT brand_lab) as nb_labs,
-        SUM(quantity) as quantity,
-        SUM(ca_ttc) as ca_ttc,
-        SUM(marge) as marge
-      FROM mv_top_products_monthly
-      ${whereClause}
-      GROUP BY category
-    )
-    SELECT 
-      category as product_name,
-      CAST(nb_labs AS TEXT) as brand_lab,
-      category,
-      CAST(nb_products AS TEXT) as sub_category,
-      'Catégorie' as code_13_ref_id,
-      NULL as range_name,
-      quantity::bigint as quantity,
-      ca_ttc,
-      marge,
-      CASE 
-        WHEN ca_ttc > 0 
-        THEN ROUND((marge / ca_ttc * 100)::numeric, 1)
-        ELSE 0 
-      END as margin_percentage,
-      0 as stock
-    FROM cat_aggregated
-    ORDER BY ${params.sortBy === 'ca_ttc' ? 'ca_ttc' : 
-             params.sortBy === 'marge' ? 'marge' : 'quantity'} DESC
-    LIMIT ${limitParam}
-  `;
-}
-
-// Construction des paramètres pour les produits
-function buildProductsParams(params: z.infer<typeof TopProductsRequestSchema>): any[] {
-  const result: any[] = [params.limit];
-  
-  if (params.year) result.push(params.year);
-  if (params.month) result.push(params.month);
-  if (params.pharmacyIds?.length) result.push(params.pharmacyIds);
-  if (params.brandLabs?.length) result.push(params.brandLabs);
-  
-  return result;
-}
-
-// Construction des paramètres pour les laboratoires
-function buildLaboratoriesParams(params: z.infer<typeof TopProductsRequestSchema>): any[] {
-  const result: any[] = [params.year || new Date().getFullYear()];
-  
-  if (params.month) result.push(params.month);
-  if (params.pharmacyIds?.length) result.push(params.pharmacyIds);
-  result.push(params.limit);
-  
-  return result;
-}
-
-// Construction des paramètres pour les catégories
-function buildCategoriesParams(params: z.infer<typeof TopProductsRequestSchema>): any[] {
-  const result: any[] = [params.year || new Date().getFullYear()];
-  
-  if (params.month) result.push(params.month);
-  if (params.pharmacyIds?.length) result.push(params.pharmacyIds);
-  if (params.brandLabs?.length) result.push(params.brandLabs);
-  result.push(params.limit);
-  
-  return result;
+  return { query, params: queryParams };
 }

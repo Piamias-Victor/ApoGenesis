@@ -1,30 +1,23 @@
 // src/hooks/dashboard/useTopProducts.ts
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useDateFilters } from './useDateFilters';
-import { useSelectedLaboratoryNames } from '@/store/productFiltersStore';
-import { usePharmacyFiltersStore } from '@/store/pharmacyFiltersStore';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
-// Types
+export type ViewType = 'products' | 'laboratories' | 'categories';
+
 export interface TopProductItem {
   rank: number;
+  internal_id?: number;
   code_13_ref_id?: string;
-  product_name?: string;
+  product_name: string;
   brand_lab?: string;
-  range_name?: string;
   category?: string;
   sub_category?: string;
-  nb_products?: number;
-  nb_pharmacies?: number;
-  nb_laboratories?: number;
+  range_name?: string;
   quantity: number;
   ca_sellout: number;
   margin: number;
   margin_percentage: number;
   stock: number;
-  avg_price?: number;
 }
-
-export type ViewType = 'products' | 'laboratories' | 'categories';
 
 interface UseTopProductsReturn {
   data: TopProductItem[] | null;
@@ -36,15 +29,13 @@ interface UseTopProductsReturn {
   executionTime: number | null;
 }
 
-// Validation UUID
-const isValidUUID = (uuid: string): boolean => {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(uuid.trim());
-};
-
 export function useTopProducts(
   initialView: ViewType = 'products',
-  limit: number = 100
+  limit: number = 100,
+  year?: number,
+  month?: number,
+  pharmacyIds?: string,
+  brandLabs?: string
 ): UseTopProductsReturn {
   const [data, setData] = useState<TopProductItem[] | null>(null);
   const [viewType, setViewType] = useState<ViewType>(initialView);
@@ -52,71 +43,53 @@ export function useTopProducts(
   const [error, setError] = useState<string | null>(null);
   const [executionTime, setExecutionTime] = useState<number | null>(null);
   
-  // Récupération des filtres
-  const { getAPIFormat } = useDateFilters();
-  const apiDateFilters = getAPIFormat();
-  const selectedLaboratoryNames = useSelectedLaboratoryNames();
-  const selectedPharmacyIds = usePharmacyFiltersStore(state => state.selectedPharmacyIds);
-  
-  // Refs pour optimisation
   const abortControllerRef = useRef<AbortController | null>(null);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const cacheRef = useRef<Map<string, { data: TopProductItem[], timestamp: number }>>(new Map());
   
-  // Construction des paramètres avec mémoisation
-  const pharmacyFilter = useMemo(
-    () => selectedPharmacyIds.length > 0 ? selectedPharmacyIds.join(',') : undefined,
-    [selectedPharmacyIds]
-  );
-  
-  const brandLabFilter = useMemo(
-    () => selectedLaboratoryNames.length > 0 ? selectedLaboratoryNames.join(',') : undefined,
-    [selectedLaboratoryNames]
-  );
-  
-  // Validation et nettoyage des paramètres
+  // Validation des paramètres
   const validatedParams = useMemo(() => {
-    const result = { pharmacyIds: '', brandLabs: '' };
+    const result = {
+      pharmacyIds: '',
+      brandLabs: '',
+      year: year || new Date().getFullYear(),
+      month: month
+    };
     
-    try {
-      // Validation des pharmacyIds
-      if (pharmacyFilter) {
-        const ids = pharmacyFilter.split(',').map(id => id.trim()).filter(Boolean);
-        const validIds = ids.filter(isValidUUID);
-        
-        if (ids.length !== validIds.length) {
-          console.warn(`Filtered ${ids.length - validIds.length} invalid pharmacy IDs`);
-        }
-        
-        result.pharmacyIds = validIds.slice(0, 100).join(',');
-      }
-      
-      // Validation des brandLabs
-      if (brandLabFilter) {
-        const labs = brandLabFilter.split(',').map(lab => lab.trim()).filter(Boolean);
-        const validLabs = labs.filter(lab => lab.length <= 100);
-        
-        if (labs.length !== validLabs.length) {
-          console.warn(`Filtered ${labs.length - validLabs.length} invalid laboratory names`);
-        }
-        
-        result.brandLabs = validLabs.slice(0, 50).join(',');
-      }
-      
-      return result;
-    } catch (e) {
-      console.error('Parameter validation error:', e);
-      return { pharmacyIds: '', brandLabs: '' };
+    // Validation des UUIDs pour pharmacyIds
+    if (pharmacyIds) {
+      const ids = pharmacyIds.split(',').map(id => id.trim()).filter(Boolean);
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const validIds = ids.filter(id => uuidRegex.test(id));
+      result.pharmacyIds = validIds.join(',');
     }
-  }, [pharmacyFilter, brandLabFilter]);
+    
+    // Validation des laboratoires
+    if (brandLabs) {
+      const labs = brandLabs.split(',').map(lab => lab.trim()).filter(Boolean);
+      result.brandLabs = labs.slice(0, 50).join(',');
+    }
+    
+    return result;
+  }, [pharmacyIds, brandLabs, year, month]);
   
-  // Fonction de fetch stable
-  const fetchTopProducts = useCallback(async () => {
-    // Annuler les requêtes précédentes
+  // Fonction de fetch avec cache
+  const fetchTopProducts = useCallback(async (currentViewType: ViewType) => {
+    // Générer une clé de cache
+    const cacheKey = `${currentViewType}-${limit}-${validatedParams.year}-${validatedParams.month}-${validatedParams.pharmacyIds}-${validatedParams.brandLabs}`;
+    
+    // Vérifier le cache (5 minutes de TTL)
+    const cached = cacheRef.current.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+      setData(cached.data);
+      setLoading(false);
+      return;
+    }
+    
+    // Annuler la requête précédente
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     
-    // Créer un nouveau controller
     abortControllerRef.current = new AbortController();
     const startTime = performance.now();
     
@@ -125,27 +98,21 @@ export function useTopProducts(
       setError(null);
       
       // Construction des paramètres
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({
+        viewType: currentViewType,
+        limit: limit.toString(),
+        year: validatedParams.year.toString(),
+        sortBy: 'quantity' // Par défaut, tri par quantité
+      });
       
-      // Ajout des filtres de date
-      if (apiDateFilters) {
-        params.append('startDate', apiDateFilters.analysisPeriod.start);
-        params.append('endDate', apiDateFilters.analysisPeriod.end);
-      } else {
-        // Dates par défaut : année en cours
-        const currentYear = new Date().getFullYear();
-        params.append('startDate', `${currentYear}-01-01`);
-        params.append('endDate', `${currentYear}-12-31`);
+      if (validatedParams.month) {
+        params.append('month', validatedParams.month.toString());
       }
       
-      // Ajout des autres paramètres
-      params.append('viewType', viewType);
-      params.append('limit', limit.toString());
-      
-      // Ajout des filtres validés
       if (validatedParams.pharmacyIds) {
         params.append('pharmacyIds', validatedParams.pharmacyIds);
       }
+      
       if (validatedParams.brandLabs) {
         params.append('brandLabs', validatedParams.brandLabs);
       }
@@ -163,21 +130,16 @@ export function useTopProducts(
       
       const result = await response.json();
       const endTime = performance.now();
-      const duration = Math.round(endTime - startTime);
       
-      setExecutionTime(duration);
+      setExecutionTime(Math.round(endTime - startTime));
       
       if (result.success) {
         setData(result.data);
-        setError(null);
-        
-        // Log en dev
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`Top products loaded in ${duration}ms`, {
-            viewType: result.viewType,
-            count: result.data.length
-          });
-        }
+        // Mettre en cache
+        cacheRef.current.set(cacheKey, {
+          data: result.data,
+          timestamp: Date.now()
+        });
       } else {
         throw new Error(result.error || 'Erreur lors du chargement des données');
       }
@@ -185,79 +147,37 @@ export function useTopProducts(
     } catch (err) {
       if (err instanceof Error && err.name !== 'AbortError') {
         setError(err.message);
-        console.error('Top products fetch error:', err);
+        console.error('Top Products fetch error:', err);
       }
     } finally {
       if (abortControllerRef.current?.signal.aborted === false) {
         setLoading(false);
       }
     }
-  }, [
-    apiDateFilters,
-    viewType,
-    limit,
-    validatedParams.pharmacyIds,
-    validatedParams.brandLabs
-  ]);
+  }, [limit, validatedParams]);
   
-  // Fonction pour changer de vue
-  const changeView = useCallback((view: ViewType) => {
-    setViewType(view);
+  // Changement de vue
+  const changeView = useCallback((newView: ViewType) => {
+    setViewType(newView);
   }, []);
   
-  // Création d'une clé unique pour les dépendances
-  const dependencyKey = useMemo(() => {
-    return JSON.stringify({
-      startDate: apiDateFilters?.analysisPeriod.start,
-      endDate: apiDateFilters?.analysisPeriod.end,
-      viewType,
-      limit,
-      pharmacyIds: validatedParams.pharmacyIds,
-      brandLabs: validatedParams.brandLabs
-    });
-  }, [
-    apiDateFilters?.analysisPeriod.start,
-    apiDateFilters?.analysisPeriod.end,
-    viewType,
-    limit,
-    validatedParams.pharmacyIds,
-    validatedParams.brandLabs
-  ]);
-  
-  // Effect avec debounce et gestion propre
+  // Effect pour charger les données
   useEffect(() => {
-    // Clear timeout précédent
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
+    fetchTopProducts(viewType);
     
-    // Nouveau timeout avec debounce
-    timeoutRef.current = setTimeout(() => {
-      fetchTopProducts();
-    }, 300);
-    
-    // Cleanup
     return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
     };
-  }, [dependencyKey]); // Utilisation de la clé unique
+  }, [viewType, fetchTopProducts]);
   
   // Refetch manuel
   const refetch = useCallback(async () => {
-    await fetchTopProducts();
-  }, [fetchTopProducts]);
-  
-  // Log performance en dev
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development' && executionTime) {
-      console.log(`Top Products loaded in ${executionTime}ms`);
-    }
-  }, [executionTime]);
+    // Vider le cache pour forcer le rechargement
+    cacheRef.current.clear();
+    await fetchTopProducts(viewType);
+  }, [viewType, fetchTopProducts]);
   
   return {
     data,
